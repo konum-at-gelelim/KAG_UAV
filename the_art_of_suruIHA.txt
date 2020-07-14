@@ -1,0 +1,18 @@
+yarışmada ihalarımız temel olarak 4 fazdan oluşuyor, bunlar:
+1- Kalkış
+2- Formasyon
+3- Real Deal
+4- Eve Dönüş
+
+KAG_UAV içerisinde sahip olduğumuz act metodumuz, bu 4 faz çerçevesinde oluşturulacak.
+Özetle, ilk olarak kalkıkş yapıcaz, sonra formasyonu gereksinimlerini yerine getirirken
+meskun mahale yol alıcağız, formasyon bittiği zaman real deal operasyonunu yerine getiriceğiz.
+Bunların dışında bizden her bir ihayı üste sağ sağlim getirmemiz istendiği için real deal operasyonu sırasında
+her iha yakıt miktarı ve üsse olan mesafe bilgileri sonucu üsse ne zaman geri döneceğine karar verip
+operasyondan ayrılıcak.
+
+örnek:
+    faz ==  0 ise kalkış
+    faz ==  1 ise Formasyon
+    faz ==  2 ise Real Deal
+    faz ==  3 ise Eve Dönüş

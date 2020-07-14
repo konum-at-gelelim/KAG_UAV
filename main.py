@@ -1,5 +1,5 @@
 import sys
-from sample_uav import SampleUAV
+from kek_uav import KekUAV
 
 
 default_ip = '127.0.0.1'
@@ -42,5 +42,5 @@ if __name__ == '__main__':
     uav_id = get_uav_id()
     ip = get_ip()
     port = get_port()
-    uav = SampleUAV(uav_id, ip, port)
+    uav = KekUAV(uav_id, ip, port)
     uav.start_listening()
