@@ -1,13 +1,25 @@
 from base.base_uav import BaseUAV
+from math import sin, cos, pi, atan2, hypot
+import random
+import time
+import numpy as np
 import math
 import random
 import util
+
+SIZE = 600
+COUNT = 10
+SPEED = 100
+FOLLOWERS = 4
+
+LJP_EPSILON = 10 #iki atom arasi minimum uzaklik
+LJP_SIGMA = 3.3 #kuvvet birimi
 
 class SampleUAV(BaseUAV):
 
     def initialize(self):
         self.target_position = None
-        self.history = deque(maxlen=64)
+        #self.history = deque(maxlen=64)
     def act(self):
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
         self.process_uav_msg()
@@ -20,31 +32,35 @@ class SampleUAV(BaseUAV):
                   (self.target_position[0], self.target_position[1], self.target_position[2]))
         self.vector_move_to_target(self.target_position)
 
-    def ljp(r, epsilon, sigma):
+    def ljp(self,r, epsilon, sigma):
         return 48 * epsilon * np.power(sigma, 12) / np.power(r, 13) \
         - 24 * epsilon * np.power(sigma, 6) / np.power(r, 7)
 
-    def uav_update(self,uavs):
+    def speed(self):
+        return 50
+
+    def uav_update(self):
         positionx, positiony = self.pose[0],self.pose[1],
-        targetx, targety = self.target_position
-        angle = atan2(targety-positiony,targetx-positionx)
-        ux = cos(angle)*speed()
-        uy = sin(angle)*speed()
-        print("speed = " + speedx + " , " + speedy + " , " + speedz)
-        # ucakların konumlarna bakilyor
-        for uav in uavs:
-            if uav == self:
-                continue
-            tempx ,tempy = uav.position
-            ##
-            distance =  hypot(px - tempx, py - tempy)
-            angle = atan2(py - tempy,px - tempx)
-            u = ljp(distance, LJP_EPSILON, LJP_SIGMA) # ucaklardan kacabilmek icin kuvvet
-            ux += cos(angle)*u
-            uy += sin(angle)*u
+        targetx, targety,targetz = self.target_position
+        angle = atan2(targetx-positionx,targety-positiony)
+        ux = cos(angle)*self.speed()
+        uy = sin(angle)*self.speed()
+        print("speed = " , ux , " , " , uy,"\n")
+        # ucaklarin konumlarina bakilyor
+        for i in range(len(self.uav_msg['uav_link'])):
+	    a=self.uav_msg["uav_link"][i].keys()
+            uav_name=a[0][4]
+            uav_name=str(uav_name)
+            if uav_name != self.uav_id:
+                tempx ,tempy = self.uav_msg["uav_link"][i].values()[0]["location"][0],self.uav_msg["uav_link"][i].values()[0]["location"][1]
+                distance =  hypot(positionx - tempx, positiony - tempy)
+                angle = atan2(positiony - tempy,positionx - tempx)
+                u = self.ljp(distance, LJP_EPSILON, LJP_SIGMA) # ucaklardan kacabilmek icin kuvvet
+                ux += cos(angle)*u
+                uy += sin(angle)*u
         angle = atan2(uy,ux)
         magnitude = hypot(ux,uy)
-        print("avoidance force = " + ux + " , " + uy)
+        print("avoidance force = " , ux , " , " , uy,"\n")
         return angle,magnitude
 
     def set_position(self, position): #onceki noktalar kayidi
@@ -70,9 +86,9 @@ class SampleUAV(BaseUAV):
             return False
 
 
-    def vector_move_to_target():
-        angle, magnitude = uav_update(uavs)
-        angle = self.heading - angle
+    def vector_move_to_target(self, target_position):
+        angle, magnitude = self.uav_update()
+        angle = self.uav_msg["active_uav"]["heading"] - angle
         if(angle < 0):
             angle += + 360
         xspeed = cos(angle) * magnitude
@@ -80,7 +96,7 @@ class SampleUAV(BaseUAV):
         #if dist < 50:
         #    x_speed = dist*0.25
         #    y_speed = dist*0.25
-        self.send_move_cmd(xspeed,yspeed,self.heading, target_position[2])
+        self.send_move_cmd(xspeed,yspeed,self.uav_msg["active_uav"]["heading"], target_position[2])
 
     def move_to_target(self, target_position):
         dist = util.dist(target_position, self.pose)
@@ -104,31 +120,7 @@ class SampleUAV(BaseUAV):
         print('x:' + str(self.pose[0]) + ' y:' + str(self.pose[1]) +
               ' altitude:' + str(self.uav_msg['active_uav']['altitude']) +
               ' fuel:' + str(self.uav_msg['active_uav']['fuel_reserve']))
-
-
-from collections import deque
-from math import sin, cos, pi, atan2, hypot
-import random
-import time
-import wx
-import numpy as np
-import matplotlib.pyplot as plt
-
-SIZE = 600
-COUNT = 10
-SPEED = 100
-FOLLOWERS = 4
-
-#σ is a length scale representing the distance at which the intermolecular
-# potential between the two atoms is = 0 (in Å units), and ε governs the
-#strength of the interaction (in eV units). In essence, it’s a measure of
-#how strongly two atoms attract each other.
-
-LJP_EPSILON = 10 #iki atom arası minimum uzaklik
-LJP_SIGMA = 3.3 #kuvvet birimi
-
-#COLORS = [wx.RED,]
-
+"""
 class UAV(object):
     def __init__(self, position, target):
         self.position = position
@@ -172,7 +164,7 @@ class Model(object):
     def select_point(self): # topcuklar icin konum uretimi
         cx = self.width / 2.0
         cy = self.height / 2.0
-        radius = min(self.width, self.height) * 0.4 # ekran genişliğine bağlı radius üretimi
+        radius = min(self.width, self.height) * 0.4 # ekran genisligine bagli radius uretimi
         angle = random.random() * 2 * pi # rastgele aci
         x = cx + cos(angle) * radius
         y = cy + sin(angle) * radius
@@ -186,10 +178,10 @@ class Model(object):
             px, py = bot.position
             tx, ty = bot.target
             bot.set_position((px + dx, py + dy))
-            if hypot(px - tx, py - ty) < 10: # belirtilen noktaya uzaklık 10 olursa.
+            if hypot(px - tx, py - ty) < 10: # belirtilen noktaya uzaklik 10 olursa.
                 bot.target = self.select_point() # yeni rastgele konum uret.
         for bot in self.bots[-FOLLOWERS:]:
-            #takipci botlar icin konum uretilmeli ve botlar o noktayı takip etmeli.
+            #takipci botlar icin konum uretilmeli ve botlar o noktayi takip etmeli.
             bot.target = self.bots[0].get_position(10)
 
 class Panel(wx.Panel):
@@ -263,3 +255,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+"""
