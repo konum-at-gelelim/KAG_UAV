@@ -45,13 +45,14 @@ class KekUAV(BaseUAV):
         self.target_position = util.Point_3d(
             self.formation_node[str(self.uav_id)][1],
             self.formation_node[str(self.uav_id)][2],
-            self.formation_node[str(self.uav_id)][3])
+            self.formation_node[str(self.uav_id)][3]).getList()
         self.set_target_position()
         print self.formation_node[str(self.uav_id)], self.target_position
         print self.uav_msg['sim_time']
         for i in self.VS:
             print i
         print "\n"
+
         #print 10 * '-', 'arrow', self.uav_msg['sim_time'], 10 * '-'
         #for i in self.formation['arrow']:
         #    print i
@@ -84,9 +85,9 @@ class KekUAV(BaseUAV):
         target_angle = math.degrees(target_angle)
         dist = util.dist(target_position, self.pose)
         x_speed = 100.0
-        if dist < 1000.0:
+        if dist < 200.0:
             # iha yi yavaslat
-            x_speed = dist*0.1
+            x_speed = dist*0.50
         self.send_move_cmd(x_speed, 0, target_angle, target_position[2])
 
     def process_uav_msg(self):
@@ -118,9 +119,9 @@ class KekUAV(BaseUAV):
                     )
                     self.VS.append([id, base_vector])
             self.target_position = (
-                self.target_position.x + base_vector.x,
-                self.target_position.y + base_vector.y,
-                self.target_position.z + base_vector.z,
+                self.target_position[0] + base_vector.x,
+                self.target_position[1] + base_vector.y,
+                self.target_position[2] + base_vector.z,
             )
         
 

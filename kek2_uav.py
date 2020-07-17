@@ -23,8 +23,8 @@ class KekUAV(BaseUAV):
         self.u_b = None
         self.u_k = None
         self.dump = None
-        self.formation_node = {}
-        self.pick_formation_node = True
+        self.formation_id = None
+        self.pick_formation_id = True
         self.formation = {'arrow': [], 'prism': []}
         self.axisMagMax = 50.0
         self.pushForceRadius = 50.0
@@ -34,8 +34,10 @@ class KekUAV(BaseUAV):
     def act(self):
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
         self.process_uav_msg()
+        print self.uav_msg['uav_guide']['gps_noise_flag']
         if self.home == None:
             self.home = (self.pose[0], self.pose[1], 100.0)
+            self.uav_id = int(self.uav_id)
 
         if self.operation_phase == 3:
             self.move_to_target(self.home)
@@ -47,12 +49,11 @@ class KekUAV(BaseUAV):
                     self.formation['arrow'] = self.arrow_gen(self.guide_location, self.a_b, self.a_k, self.u_b, self.u_k, self.uav_count)
                 else:
                     self.formation['prism'] = self.prism_gen(self.guide_location, self.a_k, self.u_b, self.u_k, self.uav_count)
-                if self.pick_formation_node:
-                    self.set_formation_node()
-                self.target_position = util.Point_3d(
-                    self.formation_node[str(self.uav_id)][1],
-                    self.formation_node[str(self.uav_id)][2],
-                    self.formation_node[str(self.uav_id)][3])
+                if self.pick_formation_id:
+                    self.set_formation_id()
+                    self.pick_formation_id = False
+                self.target_position = self.formation[self.formation_type][self.formation_id]
+                print self.target_position
                 self.move_to_target(self.target_position)
             else:
                 self.operation_phase += 1
@@ -84,9 +85,9 @@ class KekUAV(BaseUAV):
         target_angle = math.degrees(target_angle)
         dist = util.dist(target_position, self.pose)
         x_speed = 100.0
-        if dist < 1000.0:
+        if dist < 100.0:
             # iha yi yavaslat
-            x_speed = dist*0.1
+            x_speed = self.uav_msg['uav_guide']['speed']['x'] + dist * 0.2
         self.send_move_cmd(x_speed, 0, target_angle, target_position[2])
 
     def process_uav_msg(self):
@@ -103,7 +104,7 @@ class KekUAV(BaseUAV):
             self.uav_msg['uav_guide']['altitude']
         ]
         if self.formation_type != self.uav_msg['uav_formation']['type']:
-            self.pick_formation_node = True
+            self.pick_formation_id = True
         self.formation_type = self.uav_msg['uav_formation']['type']
         if self.formation_type == 'arrow':
             self.a_b = self.uav_msg['uav_formation']['a_b']
@@ -111,7 +112,7 @@ class KekUAV(BaseUAV):
         self.u_b = self.uav_msg['uav_formation']['u_b']
         self.u_k = self.uav_msg['uav_formation']['u_k']
 
-    def set_formation_node(self):
+    def set_formation_id(self):
         uav_position_list = []
         nearest = {'id': -1, 'dist': 0}
         prefix = 'uav_'
@@ -119,11 +120,11 @@ class KekUAV(BaseUAV):
             #print id, self.uav_msg['uav_link'][id][prefix + str(id)]['location']
             uav_position_list.append([
                 id,
-                self.uav_msg['uav_link'][id][prefix + str(id)]['location'][0],
-                self.uav_msg['uav_link'][id][prefix + str(id)]['location'][1],
-                self.uav_msg['uav_link'][id][prefix + str(id)]['altitude']
+                float(self.uav_msg['uav_link'][id][prefix + str(id)]['location'][0]),
+                float(self.uav_msg['uav_link'][id][prefix + str(id)]['location'][1]),
+                float(self.uav_msg['uav_link'][id][prefix + str(id)]['altitude'])
             ])
-        cx = 0
+        cx = -1
         for node in self.formation[self.formation_type]:
             cx += 1
             nearest = {'dist': None, 'id': -1}
@@ -139,10 +140,11 @@ class KekUAV(BaseUAV):
                     nearest['dist'] = d
                     nearest['id'] =  uav_position_list[next_uav_id][0]
                     pop_id = next_uav_id
-            #self.formation_node[str(nearest['id'])] = uav_position_list.pop(pop_id)
-            temp_var = uav_position_list.pop(pop_id)
-            temp_var[0] = cx
-            self.formation_node[str(nearest['id'])] = temp_var
+            #self.formation_id[str(nearest['id'])] = uav_position_list.pop(pop_id)
+            #print nearest['id'], self.uav_id, nearest['dist'], cx, self.formation_id
+            if nearest['id'] == self.uav_id:
+                self.formation_id = cx
+            uav_position_list.pop(pop_id)
 
     def rotateUndTranslate(self, formation_array, angle, pivot):
         for i in range(len(formation_array)):

@@ -1,5 +1,5 @@
 import sys
-from kek_uav import KekUAV
+from kek2_uav import KekUAV
 
 
 default_ip = '127.0.0.1'
