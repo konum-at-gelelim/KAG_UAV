@@ -8,6 +8,8 @@ class SampleUAV(BaseUAV):
 
     def initialize(self):
         self.target_position = None
+        self.fallback=False
+        self.start_loc[2]=[self.uav_msg["active_uav"]["location"][0],self.uav_msg["active_uav"]["location"][1]]
 
     def act(self):
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
@@ -59,4 +61,42 @@ class SampleUAV(BaseUAV):
               ' fuel:' + str(self.uav_msg['active_uav']['fuel_reserve']))
 
 
+##################################saha ici hesaplanmadı #############################################
+    def fallback(self,fuel):
+        if self.fallback==False:
+            knot=20/3
+            dist= util.dist(start_loc,[self.uav_msg['active_uav']['location'][0],self.uav_msg['active_uav']['location'][1]])
+            dist=dist/1.852 #knot to kmh
+            fuel_=dist*knot #aradaki knot mesafe * knot başına harcanan yakıt.
 
+            if fuel>fuel_:
+                pass
+            if fuel<fuel_:
+                self.fallback=True
+        if self.fallback==True:
+            pass
+    def getXY(self,x,y):
+        head=self.uav_msg["active_uav"]["heading"]
+        targetAngle=self.findAngle(x,y)
+        if targetAngle <0:
+            targetAngle=360+targetAngle
+        head=targetAngle-head
+        #target_position=[x,y]
+        #dist = util.dist(target_position, self.pose)
+        head=math.radians(head)
+        xx=math.sin(head)
+        yy=math.cos(head)
+        return xx,yy
+
+
+    def findAngle(self,x,y):
+        fark=[0,0]
+        uav_x=self.uav_msg["active_uav"]["location"][0]
+        uav_y=self.uav_msg["active_uav"]["location"][1]
+        fark[0]=x-uav_x
+        # 90 derece farki icin -y
+        fark[1]=uav_y-y
+        aci=math.atan2(fark[0],fark[1])
+        angle=math.degrees(aci)
+        return angle
+#####################################################################################################
