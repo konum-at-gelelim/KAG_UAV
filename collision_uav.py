@@ -27,7 +27,7 @@ class SampleUAV(BaseUAV):
         #     print('uav_guide.dispath is True')
 
         if self.reach_to_target():
-            self.target_position = (200,200,90)
+            self.target_position = (4000,-1000,90)
             print('random target position x:%f y:%f altitude:%f' %
                   (self.target_position[0], self.target_position[1], self.target_position[2]))
         self.vector_move_to_target(self.target_position)
@@ -42,10 +42,11 @@ class SampleUAV(BaseUAV):
     def uav_update(self):
         positionx, positiony = self.pose[0],self.pose[1],
         targetx, targety,targetz = self.target_position
-        angle = atan2(targetx-positionx,targety-positiony)
+        angle = atan2(targetx-positionx,-(targety-positiony))
+        angle = math.degrees(angle)
         ux = cos(angle)*self.speed()
         uy = sin(angle)*self.speed()
-        print("speed = " , ux , " , " , uy,"\n")
+        print("speed = " , ux , " , " , uy)
         # ucaklarin konumlarina bakilyor
         for i in range(len(self.uav_msg['uav_link'])):
 	    a=self.uav_msg["uav_link"][i].keys()
@@ -54,13 +55,15 @@ class SampleUAV(BaseUAV):
             if uav_name != self.uav_id:
                 tempx ,tempy = self.uav_msg["uav_link"][i].values()[0]["location"][0],self.uav_msg["uav_link"][i].values()[0]["location"][1]
                 distance =  hypot(positionx - tempx, positiony - tempy)
-                angle = atan2(positiony - tempy,positionx - tempx)
+                angle = atan2(positionx - tempx,-(positiony - tempy))
+                angle = math.degrees(angle)
                 u = self.ljp(distance, LJP_EPSILON, LJP_SIGMA) # ucaklardan kacabilmek icin kuvvet
-                ux += cos(angle)*u
-                uy += sin(angle)*u
+                ux = ux + (cos(angle)*u*20000)
+                uy = uy + (sin(angle)*u*20000)
+                print(ux,uy)
         angle = atan2(uy,ux)
         magnitude = hypot(ux,uy)
-        print("avoidance force = " , ux , " , " , uy,"\n")
+        #print("avoidance force = " , ux , " , " , uy)
         return angle,magnitude
 
     def set_position(self, position): #onceki noktalar kayidi
@@ -84,7 +87,6 @@ class SampleUAV(BaseUAV):
             return True
         else:
             return False
-
 
     def vector_move_to_target(self, target_position):
         angle, magnitude = self.uav_update()
