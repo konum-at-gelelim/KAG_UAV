@@ -72,7 +72,7 @@ class SampleUAV(BaseUAV):
         if self.fallback==False:
             knot=20/3
             dist= util.dist(self.start_loc,[self.uav_msg['active_uav']['location'][0],self.uav_msg['active_uav']['location'][1]])
-            dist=dist/1.852 #knot to kmh
+            dist=dist/1852 #knot to kmh
             fuel_=dist*knot #aradaki knot mesafe * knot basina harcanan yakit.
 
             if fuel>fuel_:
@@ -81,6 +81,7 @@ class SampleUAV(BaseUAV):
                 self.fallback=True
         if self.fallback==True:
             pass
+#####################################################################################################
 
     def getXY(self,x,y,speed):
         head=self.uav_msg["active_uav"]["heading"]
@@ -110,4 +111,3 @@ class SampleUAV(BaseUAV):
         aci=math.atan2(fark[0],fark[1])
         angle=math.degrees(aci)
         return angle
-#####################################################################################################
