@@ -36,7 +36,7 @@ class KekUAV(BaseUAV):
         self.lock_heading = False
         # k = 1 unit of [*_speed] /  1 uint of [sim_time]
         #change of location -> (speed * time) * k
-        self.k = 0.0005125
+        self.k = 0.0005144444
 
     def act(self):
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
