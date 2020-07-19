@@ -7,22 +7,24 @@ import util
 class SampleUAV(BaseUAV):
 
     def initialize(self):
-        self.target_position = None
+        self.target_position = [2000,-1000,90]
         self.fallback=False
-        self.start_loc[2]=[self.uav_msg["active_uav"]["location"][0],self.uav_msg["active_uav"]["location"][1]]
+        self.start_loc=None
 
     def act(self):
+        if self.start_loc==None:
+            self.start_loc=[self.uav_msg["active_uav"]["location"][0],self.uav_msg["active_uav"]["location"][1]]
+        self.amifallback()
+        if self.fallback:
+            print("geridonn")
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
         self.process_uav_msg()
+        print(self.uav_msg["active_uav"]["x_speed"],self.uav_msg["active_uav"]["y_speed"])
         # if self.uav_msg['uav_guide']['dispatch']:
         #     print('uav_guide.dispath is True')
-
         if self.reach_to_target():
-            self.target_position = (random.randint(-400, 400),
-                               random.randint(-400, 400),
-                               random.randint(10, 150))
-            print('random target position x:%f y:%f altitude:%f' %
-                  (self.target_position[0], self.target_position[1], self.target_position[2]))
+            self.send_move_cmd(0, 0, target_angle, target_position[2])
+
 
         self.move_to_target(self.target_position)
 
@@ -49,7 +51,8 @@ class SampleUAV(BaseUAV):
         if dist < 50:
             # iha yi yavaslat
             x_speed = dist*0.25
-        self.send_move_cmd(x_speed, 0, target_angle, target_position[2])
+        x_speed,y_speed=self.getXY(target_position[0],target_position[1],x_speed)
+        self.send_move_cmd(x_speed, y_speed, target_angle, target_position[2])
 
     def process_uav_msg(self):
         self.pose = [self.uav_msg['active_uav']['location'][0],
@@ -61,13 +64,16 @@ class SampleUAV(BaseUAV):
               ' fuel:' + str(self.uav_msg['active_uav']['fuel_reserve']))
 
 
-##################################saha ici hesaplanmadı #############################################
-    def fallback(self,fuel):
+##################################saha ici hesaplanmadi #############################################
+    def amifallback(self):
+        fuel=self.uav_msg['active_uav']["fuel_reserve"]
+        if self.start_loc==None:
+            pass
         if self.fallback==False:
             knot=20/3
-            dist= util.dist(start_loc,[self.uav_msg['active_uav']['location'][0],self.uav_msg['active_uav']['location'][1]])
+            dist= util.dist(self.start_loc,[self.uav_msg['active_uav']['location'][0],self.uav_msg['active_uav']['location'][1]])
             dist=dist/1.852 #knot to kmh
-            fuel_=dist*knot #aradaki knot mesafe * knot başına harcanan yakıt.
+            fuel_=dist*knot #aradaki knot mesafe * knot basina harcanan yakit.
 
             if fuel>fuel_:
                 pass
@@ -75,19 +81,24 @@ class SampleUAV(BaseUAV):
                 self.fallback=True
         if self.fallback==True:
             pass
-    def getXY(self,x,y):
+
+    def getXY(self,x,y,speed):
         head=self.uav_msg["active_uav"]["heading"]
         targetAngle=self.findAngle(x,y)
         if targetAngle <0:
             targetAngle=360+targetAngle
         head=targetAngle-head
+        print(head)
         #target_position=[x,y]
         #dist = util.dist(target_position, self.pose)
         head=math.radians(head)
-        xx=math.sin(head)
-        yy=math.cos(head)
+        yy=math.sin(head)
+        xx=math.cos(head)
+        top=math.sqrt(xx**2+yy**2)
+        value=speed/top
+        xx=xx*value
+        yy=yy*value
         return xx,yy
-
 
     def findAngle(self,x,y):
         fark=[0,0]
