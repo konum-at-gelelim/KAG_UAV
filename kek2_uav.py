@@ -26,22 +26,29 @@ class KekUAV(BaseUAV):
         self.formation_id = None
         self.pick_formation_id = True
         self.formation = {'arrow': [], 'prism': []}
-        self.axisMagMax = 50.0
-        self.pushForceRadius = 50.0
-        self.VS = []
+        self.speed = [0.0, 0.0]
         self.operation_phase = 0
+        self.loop_time = None
+        self.loop_location = [0.0, 0.0]
+        self.direction = [0.0, 0.0]
+        self.pre_sim_time = 0.0
+        self.heading = None
+        self.lock_heading = False
+        # k = 1 unit of [*_speed] /  1 uint of [sim_time]
+        #change of location -> (speed * time) * k
+        self.k = 0.0005125
 
     def act(self):
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
         self.process_uav_msg()
-        print self.uav_msg['uav_guide']['gps_noise_flag']
         if self.home == None:
             self.home = (self.pose[0], self.pose[1], 100.0)
+            self.pre_location = [self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
             self.uav_id = int(self.uav_id)
-
+            self.pre_sim_time = self.uav_msg['sim_time']
+            self.heading = self.uav_msg['active_uav']['heading'] % 360.0
         if self.operation_phase == 3:
             self.move_to_target(self.home)
-        
         elif self.operation_phase == 1:
             if not self.uav_msg['uav_guide']['dispatch']:
                 self.get_formation_data()
@@ -53,42 +60,54 @@ class KekUAV(BaseUAV):
                     self.set_formation_id()
                     self.pick_formation_id = False
                 self.target_position = self.formation[self.formation_type][self.formation_id]
-                print self.target_position
-                self.move_to_target(self.target_position)
+                self.calculate_loop_movement()
+                if not self.uav_msg['uav_guide']['gps_noise_flag']:
+                    self.heading = self.uav_msg['active_uav']['heading'] % 360.0
+                    self.move_to_target(self.target_position)
+                else:
+                    if not self.lock_heading:
+                        self.heading = 270.0
+                        self.lock_heading = True
+                    self.gps_noise_move_to_target(self.target_position)
             else:
                 self.operation_phase += 1
-
         elif self.operation_phase == 2:
             pass
-    
         else:
             if self.uav_msg['uav_guide']['dispatch']:
                 self.send_move_cmd(0, 0, self.uav_msg['uav_guide']['heading'], 100.0)
             else:
                 self.operation_phase += 1
-
-
-    def reach_to_target(self):
-        if self.target_position is None:
-            return True
-
-        thresh = 3.0 # bu degerden daha yakinsak vardik sayiyoruz
-        dist = util.dist(self.target_position, self.pose)
-        if dist < thresh:
-            return True
-        else:
-            return False
+        self.calculate_loop_movement()
 
     def move_to_target(self, target_position):
         dist = util.dist(target_position, self.pose)
         target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
         target_angle = math.degrees(target_angle)
-        dist = util.dist(target_position, self.pose)
-        x_speed = 100.0
+        self.speed[0] = 100.0
+        self.speed[1] = 0.0
         if dist < 100.0:
             # iha yi yavaslat
-            x_speed = self.uav_msg['uav_guide']['speed']['x'] + dist * 0.2
-        self.send_move_cmd(x_speed, 0, target_angle, target_position[2])
+            self.speed[0] = self.uav_msg['uav_guide']['speed']['x'] + dist * 0.2
+        self.send_move_cmd(self.speed[0], self.speed[1], target_angle, target_position[2])
+
+    def gps_noise_move_to_target(self, target_position):
+        dist = [
+            math.sqrt((target_position[0] - self.loop_location[0]) * (target_position[0] - self.loop_location[0])),
+            math.sqrt((target_position[1] - self.loop_location[1]) * (target_position[1] - self.loop_location[1])),
+        ]
+        self.speed[0] = self.uav_msg['uav_guide']['speed']['x'] - 1.0 + dist[0] * 0.25
+        self.speed[1] = self.uav_msg['uav_guide']['speed']['y'] - 1.0 + dist[0] * 0.25
+        if target_position[0] - self.loop_location[0] < 0.0:
+            self.direction[0] = -1
+        else:
+            self.direction[0] = 1
+        if target_position[1] - self.loop_location[1] < 0.0:
+            self.direction[1] = -1
+        else:
+            self.direction[1] = 1
+        self.send_move_cmd(self.speed[0], self.speed[1], self.heading, target_position[2])
+        
 
     def process_uav_msg(self):
         self.pose = [self.uav_msg['active_uav']['location'][0],
@@ -139,7 +158,7 @@ class KekUAV(BaseUAV):
                 if nearest['dist'] < d:
                     nearest['dist'] = d
                     nearest['id'] =  uav_position_list[next_uav_id][0]
-                    pop_id = next_uav_id
+                    pop_id = int(next_uav_id)
             #self.formation_id[str(nearest['id'])] = uav_position_list.pop(pop_id)
             #print nearest['id'], self.uav_id, nearest['dist'], cx, self.formation_id
             if nearest['id'] == self.uav_id:
@@ -216,3 +235,13 @@ class KekUAV(BaseUAV):
         #return prism_formation
         return self.rotateUndTranslate(prism_formation, a_k, pivot)
 
+    def calculate_loop_movement(self): 
+        self.loop_time = self.uav_msg['sim_time'] - self.pre_sim_time
+        self.pre_sim_time = self.uav_msg['sim_time']
+        if self.uav_msg['uav_guide']['gps_noise_flag']:
+            self.loop_location[0] += self.speed[0] * self.loop_time * self.k * self.direction[0]
+            self.loop_location[1] += self.speed[1] * self.loop_time * self.k * self.direction[1]
+        else:
+            self.loop_location[0] = self.uav_msg['active_uav']['location'][0]
+            self.loop_location[1] = self.uav_msg['active_uav']['location'][1]
+        print self.loop_location, self.uav_msg['active_uav']['location'], self.speed, self.heading, self.uav_msg['uav_guide']['gps_noise_flag']
