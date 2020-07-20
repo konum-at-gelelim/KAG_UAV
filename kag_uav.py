@@ -5,7 +5,7 @@ import util
 import time
 
 
-class KekUAV(BaseUAV):
+class KagUAV(BaseUAV):
 
     def initialize(self):
         self.iteration_count = 0
@@ -27,6 +27,8 @@ class KekUAV(BaseUAV):
         self.pick_formation_id = True
         self.formation = {'arrow': [], 'prism': []}
         self.speed = [0.0, 0.0]
+        self.LJP_EPSILON = 0.0103
+        self.LJP_SIGMA = 10  
         self.operation_phase = 0
         self.loop_time = None
         self.loop_location = [0.0, 0.0]
@@ -164,6 +166,35 @@ class KekUAV(BaseUAV):
             if nearest['id'] == self.uav_id:
                 self.formation_id = cx
             uav_position_list.pop(pop_id)
+    
+    def uav_update(self):
+        positionx, positiony = self.pose[0], self.pose[1]
+        targetx, targety,targetz = self.target_position
+        angle = atan2(targetx - positionx, -(targety - positiony))
+        angle = math.degrees(angle)
+        ux = cos(angle)*50
+        uy = sin(angle)*50
+        print("speed = " , ux , " , " , uy)
+        # ucaklarin konumlarina bakilyor
+        for i in range(len(self.uav_msg['uav_link'])):
+            a=self.uav_msg["uav_link"][i].keys()
+            uav_name=a[0][4]
+            uav_name=str(uav_name)
+            if uav_name != self.uav_id:
+                tempx ,tempy = self.uav_msg["uav_link"][i].values()[0]["location"][0],self.uav_msg["uav_link"][i].values()[0]["location"][1]
+                distance =  hypot(positionx - tempx, positiony - tempy)
+                angle = atan2(tempx - positionx, -(tempy - positiony))
+                angle = math.degrees(angle)
+                u = self.ljp(distance, LJP_EPSILON, LJP_SIGMA) # ucaklardan kacabilmek icin kuvvet
+                ux = ux - (cos(angle)*u*20000)
+                uy = uy - (sin(angle)*u*20000)
+        angle = atan2(uy,ux)
+        magnitude = hypot(ux,uy)
+        return angle, magnitude
+        
+    def ljp(r, epsilon, sigma):
+        return 48 * epsilon * np.power(sigma, 12) / np.power(r, 13) \
+        - 24 * epsilon * np.power(sigma, 6) / np.power(r, 7)
 
     def rotateUndTranslate(self, formation_array, angle, pivot):
         for i in range(len(formation_array)):

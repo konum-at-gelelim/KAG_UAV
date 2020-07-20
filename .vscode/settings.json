@@ -1,0 +1,5 @@
+{
+    "python.pythonPath": "C:\\ProgramData\\chocolatey\\bin\\python.exe",
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true
+}
