@@ -10,6 +10,8 @@ class KagUAV(BaseUAV):
     def initialize(self):
         self.iteration_count = 0
         self.home = None
+        self.start_loc = None
+        self.fallback=False
         self.take_off = False
         self.last_state = None
         self.dispatch_is_okey = False
@@ -195,6 +197,54 @@ class KagUAV(BaseUAV):
     def ljp(r, epsilon, sigma):
         return 48 * epsilon * np.power(sigma, 12) / np.power(r, 13) \
         - 24 * epsilon * np.power(sigma, 6) / np.power(r, 7)
+
+    def amifallback(self):
+        fuel=self.uav_msg['active_uav']["fuel_reserve"]
+        if self.start_loc==None:
+            pass
+        if self.fallback==False:
+            knot=20/3
+            dist= util.dist(self.start_loc,[self.uav_msg['active_uav']['location'][0],self.uav_msg['active_uav']['location'][1]])
+            #knot to kmh
+            dist=dist*1.852 
+            #aradaki knot mesafe * knot basina harcanan yakit.
+            fuel_=dist*knot
+
+            if fuel>fuel_:
+                pass
+            if fuel<fuel_:
+                self.fallback=True
+        if self.fallback==True:
+            pass
+
+    def getXY(self,x,y,speed):
+        head=self.uav_msg["active_uav"]["heading"]
+        targetAngle=self.findAngle(x,y)
+        if targetAngle <0:
+            targetAngle=360+targetAngle
+        head=targetAngle-head
+        print(head)
+        #target_position=[x,y]
+        #dist = util.dist(target_position, self.pose)
+        head=math.radians(head)
+        yy=math.sin(head)
+        xx=math.cos(head)
+        top=math.sqrt(xx**2+yy**2)
+        value=speed/top
+        xx=xx*value
+        yy=yy*value
+        return xx,yy
+
+    def findAngle(self,x,y):
+        fark=[0,0]
+        uav_x=self.uav_msg["active_uav"]["location"][0]
+        uav_y=self.uav_msg["active_uav"]["location"][1]
+        fark[0]=x-uav_x
+        # 90 derece farki icin -y
+        fark[1]=uav_y-y
+        aci=math.atan2(fark[0],fark[1])
+        angle=math.degrees(aci)
+        return angle
 
     def rotateUndTranslate(self, formation_array, angle, pivot):
         for i in range(len(formation_array)):
