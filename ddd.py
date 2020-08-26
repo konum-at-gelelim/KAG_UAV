@@ -144,7 +144,7 @@ class KagUAV(BaseUAV):
             self.timetemp = self.uav_msg['sim_time']
             self.instantxdiff = 0
             self.instantydiff = 0
-        self.oldheading = self.gps_heading
+            self.oldheading = self.gps_heading#
         self.time = self.uav_msg['sim_time']
         if(self.temp >= 1):
             xdiff = self.uav_msg['active_uav']['location'][0] - self.xloc
