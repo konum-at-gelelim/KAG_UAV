@@ -63,6 +63,7 @@ class KagUAV(BaseUAV):
         self.averagehead = None
         self.xloc = None
         self.yloc = None
+        self.cruise_control = False
 
     def act(self):
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
@@ -172,6 +173,13 @@ class KagUAV(BaseUAV):
         x_speed = 90
         x_speed,y_speed=self.getXY(target_position[0],target_position[1],x_speed)
         self.send_move_cmd(x_speed,y_speed, target_angle, target_position[2])
+
+    def reached(self):
+        dist = util.dist(self.target_position, self.pose)
+        if dist < 3:
+            self.cruise_control = True
+        else:
+            self.cruise_control = False
 
     def process_uav_msg(self):
         self.pose = [self.uav_msg['active_uav']['location'][0],
