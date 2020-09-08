@@ -4,32 +4,37 @@ import json
 import util
 import time
 
-#BURAYI OKUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU
-# ! param.json benim json dosyası !
-# ! projedeki util dosyasında dist() fonksiyonu var onu kullanıyor bu !
-# ! bu kadar, ted konuşmamı okuduğun için eyw !
-
 start_time = time.time()
 with open('param.json') as f:
     data = json.load(f)
 
-cluster_count = 1
-cluster_min_element = 4
+
 tall_index = 0
 while(data['special_assets'][tall_index]['type'] != 'tall_building'):
     tall_index += 1
-tall_buildings = []
-tall_buildings_adapted = []
+special_assets = []
 tall_count = len(data['special_assets'][tall_index]['locations'])
-hospitals = []
-hospitals_adapted = []
 
-if data['special_assets'][tall_index]['width'][0] > data['special_assets'][tall_index]['width'][1]:
-    bridge_length = data['special_assets'][tall_index]['width'][0] * 2.5
-else:
-    bridge_length = data['special_assets'][tall_index]['width'][1] * 2.5
+#if data['special_assets'][tall_index]['width'][0] > data['special_assets'][tall_index]['width'][1]:
+#    bridge_length = data['special_assets'][tall_index]['width'][0] * 100
+#else:
+#    bridge_length = data['special_assets'][tall_index]['width'][1] * 2.5
+bridge_length = 100.0
+cluster_count = 0
+cluster_element_treshold = 3
+
 deniedZones = data['denied_zones']
 position_offset = float(data['world_length'] / 2)
+color_cursor = 0
+colors = [
+    'black',
+    'red',
+    'green',
+    'blue',
+    'magenta',
+    'yellow',
+    'cyan',
+]
 
 def inDeniedZone(p):
     for polygon in deniedZones:
@@ -38,15 +43,12 @@ def inDeniedZone(p):
             return True
     return False
 
-for zone in data['special_assets']:
-    if zone['type'] == 'tall_building':
-        for t in zone['locations']:
-            tall_buildings.append(t)
-    else:
-        hospitals.append([
-            zone['location']['x'],
-            zone['location']['y']
-            ])
+def notInDeniedZone(p):
+    for polygon in deniedZones:
+        path = mpltPath.Path(polygon)
+        if path.contains_points(p):
+            return False
+    return True
 
 def forAll(l):
     for i in l:
@@ -55,42 +57,81 @@ def forAll(l):
 def normalPos(p):
     return [p[0] - position_offset, p[1] - position_offset]
 
-def get_neighbour_count(i):
+def makeClusters():
     global cluster_count
-    c = 0
-    p = tall_buildings_adapted[i]['p']
-    neighbourList = [i]
-    for j in range(len(tall_buildings_adapted)):
-        if (j != i) and (tall_buildings_adapted[j]['c'] == 0):
-            t = tall_buildings_adapted[j]['p']
-            d = util.dist(p, t)
-            if d <= bridge_length:
-                c += 1
-                neighbourList.append(j)
-    if c >= cluster_min_element:
-        for j in neighbourList:
-            tall_buildings_adapted[j]['c'] = cluster_count
-        cluster_count += 1
+    global cluster_element_treshold
+    for i in range(len(special_assets)):
+        neighbour_index_list = [i]
+        base_point = special_assets[i]
+        if not cluster_count:
+            for j in range(len(special_assets)):
+                if(j != i):
+                    d = util.dist(base_point['p'], special_assets[j]['p'])
+                    if d <= bridge_length:
+                        neighbour_index_list.append(j)
+            if len(neighbour_index_list) > cluster_element_treshold:
+                cluster_count = cluster_count + 1
+                for j in neighbour_index_list:
+                    special_assets[j]['c'] = cluster_count
+        else:
+            if base_point['c']:
+                for j in range(len(special_assets)):
+                    if(j != i) and (not special_assets[j]['c']):
+                        d = util.dist(base_point['p'], special_assets[j]['p'])
+                        if d <= bridge_length:
+                            special_assets[j]['c'] = base_point['c']
+            else:
+                for j in range(len(special_assets)):
+                    d = util.dist(base_point['p'], special_assets[j]['p'])
+                    if d <= bridge_length:
+                        if(j != i) and (special_assets[j]['c']):
+                            special_assets[i]['c'] = special_assets[j]['c']
+                            break
+                        neighbour_index_list.append(j)
+                if special_assets[i]['c']:
+                    continue
+                elif len(neighbour_index_list) > cluster_element_treshold:
+                    cluster_count += 1
+                    for j in neighbour_index_list:
+                        special_assets[j]['c'] = cluster_count
 
 
+for building in data['special_assets']:
+    if building['type'] == 'tall_building':
+        for p in building['locations']:
+            print(p)
+            print([p[0], p[1]])
+            if notInDeniedZone([p]):
+                special_assets.append({
+                    'p':[
+                        float(p[0] + position_offset),
+                        float(p[1] + position_offset)
+                    ],
+                    'c': 0
+                })
 
-while(len(tall_buildings) != 0):
-    temp = [position_offset * 2 + 1, -1.0]
-    pop_index = None
-    for i in range(len(tall_buildings)):
-        next_tall = [float(tall_buildings[i][0] + position_offset), float(tall_buildings[i][1] + position_offset)]
-        if (next_tall[1] > temp[1]) or (next_tall[1] == temp[1] and next_tall[0] < temp[0]):
-            temp[0] = float(next_tall[0])
-            temp[1] = float(next_tall[1])
-            pop_index = i
-    tall_buildings_adapted.append({
-        'p': temp,
-        'c': 0
-        }) 
-    del(tall_buildings[pop_index])
+#   else:
+#       special_assets.append({
+#           'p':[
+#               float(building['location']['x'] + position_offset),
+#               float(building['location']['y'] + position_offset)
+#           ],
+#           'c': 0
+#       })
+#       special_assets.append({
+#           'p':[
+#               float(building['location']['x'] + position_offset),
+#               float(building['location']['y'] + position_offset)
+#           ],
+#           'c': 0
+#       })
 
-for i in range(len(tall_buildings_adapted)):
-    get_neighbour_count(i)
-forAll(tall_buildings_adapted)
-print(len(tall_buildings_adapted))
+makeClusters()
+forAll(special_assets)
 print("--- %s seconds ---" % (time.time() - start_time))
+
+for p in special_assets:
+    plt.plot(p['p'][0], p['p'][1], marker='.', color=colors[p['c']])
+    color_cursor += 1
+    color_cursor %= 7
+plt.show()
