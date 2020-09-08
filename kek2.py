@@ -126,8 +126,19 @@ makeClusters()
 forAll(special_assets)
 print("--- %s seconds ---" % (time.time() - start_time))
 
+for i in range(len(special_assets)):
+    special_assets[i]['p'] = normalPos(special_assets[i]['p'])
+
 for p in special_assets:
     plt.plot(p['p'][0], p['p'][1], marker='.', color=colors[p['c']])
     color_cursor += 1
     color_cursor %= 7
 plt.show()
+
+clusters = []
+for i in range(cluster_count + 1):
+    clusters.append([])
+for i in special_assets:
+    clusters[i['c']].append(i['p'])
+for i in clusters:
+    forAll(i)

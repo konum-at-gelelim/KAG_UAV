@@ -35,6 +35,9 @@ class KagUAV(BaseUAV):
                 return False
         return True
     
+    def normalPos(self, p):
+        return [p[0] - self.position_offset, p[1] - self.position_offset]
+    
     def makeClusters(self):
         for i in range(len(self.special_assets)):
             neighbour_index_list = [i]
@@ -115,6 +118,8 @@ class KagUAV(BaseUAV):
                     'c': 0
                 })
         self.makeClusters()
+        for i in range(len(self.special_assets)):
+            self.special_assets[i]['p'] = self.normalPos(self.special_assets[i]['p'])
         util.forAll(self.special_assets)
         for p in self.special_assets:
             plt.plot(p['p'][0], p['p'][1], marker='.', color=colors[p['c']])

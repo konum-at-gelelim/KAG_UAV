@@ -127,6 +127,10 @@ for building in data['special_assets']:
 #       })
 
 makeClusters()
+
+for i in range(len(special_assets)):
+    special_assets[i]['p'] = normalPos(special_assets[i]['p'])
+
 forAll(special_assets)
 print("--- %s seconds ---" % (time.time() - start_time))
 
