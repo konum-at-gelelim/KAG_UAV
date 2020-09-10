@@ -24,7 +24,6 @@ class KagUAV(BaseUAV):
         self.locdifftemp = 1942.27
         self.virtualgpsx = 0
         self.virtualgpsy = 0
-               #
         self.iteration_count = 0
         self.home = None
         self.start_loc = None
@@ -52,22 +51,30 @@ class KagUAV(BaseUAV):
         self.pre_sim_time = 0.0
         self.heading = None
         self.lock_heading = False
-
+        self.brake_limit = 100
+        self.brake_timer = 100
         # k = 1 unit of [*_speed] /  1 uint of [sim_time]
         #change of location -> (speed * time) * k
+        self.time = None
+        self.gps_heading = None
+        self.gps_alt = None
         self.k = 0.0005144444
         self.gps_noise_loc=[0,0]
+        self.x = None
+        self.y = None
+        self.oldheading = None
+        self.averagehead = None
+        self.xloc = None
+        self.yloc = None
+        self.cruise_control = False
 
     def act(self):
         # bu adimda mevcut mesaj islenecek ve bir hareket komutu gonderilecek.
-        self.amifallback()
         self.process_uav_msg()
-
-
-
-
+        #self.amifallback()
         if self.home == None:
             self.home = (self.pose[0], self.pose[1], 100.0)
+            self.start_loc = self.home
             self.pre_location = [self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
             self.uav_id = int(self.uav_id)
             self.pre_sim_time = self.uav_msg['sim_time']
@@ -75,21 +82,16 @@ class KagUAV(BaseUAV):
         if self.operation_phase == 3:
             self.move_to_target(self.home)
         elif self.operation_phase == 1:
-            if self.uav_msg['uav_guide']['gps_noise_flag']==False:
-                self.gps_noise_loc=[self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
+            #if self.uav_msg['uav_guide']['gps_noise_flag']==False:
+            #    self.gps_noise_loc=[self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
+            #    self.gps_heading = self.uav_msg["active_uav"]['heading']
             if not self.uav_msg['uav_guide']['dispatch']:
-                self.get_formation_data()
-                if self.formation_type == 'arrow':
-                    self.formation['arrow'] = self.arrow_gen(self.guide_location, self.a_b, self.a_k, self.u_b, self.u_k, self.uav_count)
-                else:
-                    self.formation['prism'] = self.prism_gen(self.guide_location, self.a_k, self.u_b, self.u_k, self.uav_count)
-                if self.pick_formation_id:
-                    self.set_formation_id()
-                    self.pick_formation_id = False
-                self.target_position = self.formation[self.formation_type][self.formation_id]
                 if self.uav_msg['uav_guide']['gps_noise_flag']:
-                    self.speed_calc()
-                    self.gps_move(self.target_position)
+                    self.gps_move()
+                else:
+                    self.formation_setup()
+                    self.gps_alt = self.pose[2]
+                    self.formation_move(self.target_position)
 
             else:
                 self.operation_phase += 1
@@ -97,20 +99,49 @@ class KagUAV(BaseUAV):
             pass
         else:
             if self.uav_msg['uav_guide']['dispatch']:
-                self.send_move_cmd(0, 0, self.uav_msg['uav_guide']['heading'], 100.0)
+                self.formation_setup()
+                self.formation_move(self.target_position)
             else:
                 self.operation_phase += 1
-        self.calculate_loop_movement()
 
 
+    def formation_setup(self):
+        self.get_formation_data()
+        if self.formation_type == 'arrow':
+            self.formation['arrow'] = self.arrow_gen(self.guide_location, self.a_b, self.a_k, self.u_b, self.u_k, self.uav_count)
+        else:
+            self.formation['prism'] = self.prism_gen(self.guide_location, self.a_k, self.u_b, self.u_k, self.uav_count)
+        if self.pick_formation_id:
+            self.set_formation_id()
+            self.pick_formation_id = False
+        self.target_position = self.formation[self.formation_type][self.formation_id]
 
+    def gps_move(self):
+        self.brake_timer = 0
+        xv = self.uav_msg['uav_guide']['speed']['x']
+        heading = self.uav_msg['uav_guide']['heading'] % 360.0
+        self.send_move_cmd(xv, 0, heading, self.gps_alt)
 
-    def gps_move(self,target):
-        pass
+    def formation_move(self, target_position):
+        dist = util.dist(target_position, self.pose)
+        target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
+        target_angle = math.degrees(target_angle) % 360.0
+        x_speed = self.uav_msg['uav_guide']['speed']['x']
+        if self.brake_timer < self.brake_limit:
+            self.brake_timer += 1
+            target_angle = self.pose[3]
+            x_speed = 0
+        else:
+            if not self.reached(dist):
+                x_speed += dist * 0.125
+        if target_position[2] < 1.0:
+            target_position[2] = 1.0
+        self.send_move_cmd(x_speed, 0.0, target_angle, target_position[2])
+        print(self.formation_id, self.formation[self.formation_type][self.formation_id])
 
     def speed_calc(self):
         if(self.temp >= 1):
-            self.averagehead = ((self.uav_msg["active_uav"]['heading'] + self.oldheading)/2) % 360.0
+            self.averageh = ((self.uav_msg["active_uav"]['heading'] + self.oldheading)/2) % 360.0
             self.averagex = self.x + math.sin(math.radians(self.averagehead)) * self.uav_msg['active_uav']['x_speed']
             self.averagex = (self.averagex + math.sin(math.radians((self.averagehead - 90.0) % 360.0)) * self.uav_msg['active_uav']['y_speed'])/2
             self.averagey = self.y - math.cos(math.radians(self.averagehead)) * self.uav_msg['active_uav']['x_speed']
@@ -124,7 +155,7 @@ class KagUAV(BaseUAV):
             print("timediff = ",self.timediff)
             print("tahmini yer degisirme = ", self.instantxdiff, self.instantydiff)
         self.x = math.sin(math.radians(self.uav_msg["active_uav"]['heading'])) * self.uav_msg['uav_guide']['speed']['x']
-        self.x = self.x + math.sin(math.radians((self.uav_msg["active_uav"]['heading'] - 90.0) % 360.0)) * self.uav_msg['uav_guide']['speed']['y']
+        self.x = self.x + math.sin(self.uav_msg(math.radians((self.uav_msg["active_uav"]['heading'] - 90.0) % 360.0))) * self.uav_msg['uav_guide']['speed']['y']
         self.y = -(math.cos(math.radians(self.uav_msg["active_uav"]['heading'])) * self.uav_msg['uav_guide']['speed']['x'])
         self.y = self.y - math.cos(math.radians((self.uav_msg["active_uav"]['heading'] - 90.0) % 360.0)) * self.uav_msg['uav_guide']['speed']['y']
         if(self.temp == 0):
@@ -137,7 +168,7 @@ class KagUAV(BaseUAV):
             self.timetemp = self.uav_msg['sim_time']
             self.instantxdiff = 0
             self.instantydiff = 0
-        self.oldheading = self.uav_msg["active_uav"]['heading']
+        self.oldheading = self.gps_heading
         self.time = self.uav_msg['sim_time']
         if(self.temp >= 1):
             xdiff = self.uav_msg['active_uav']['location'][0] - self.xloc
@@ -156,29 +187,30 @@ class KagUAV(BaseUAV):
             print("tahmini gps = ",self.virtualgpsx,self.virtualgpsy)
             print("real gps = ",self.xloc,self.yloc)
             #print("tahmin edilen x deger = ",self.virtualgpsx, " + ",self.instantxdiff," = ", self.virtualgpsx + self.instantxdiff)
-            #print("tahmin edilen y deger = ",self.virtualgpsy, " + ",self.instantydiff," = ", self.virtualgpsy + self.instantydiff)
+            #print("tahmin edilenself.uav_msg y deger = ",self.virtualgpsy, " + ",self.instantydiff," = ", self.virtualgpsy + self.instantydiff)
         self.temp = self.temp + 1
 
-
-
     def move_to_target(self, target_position):
-        dist = util.dist(target_position, self.pose)
+        #dist = util.dist(target_position, self.pose)
         target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
         target_angle = math.degrees(target_angle)
-        dist = util.dist(target_position, self.pose)
         x_speed = 90
         x_speed,y_speed=self.getXY(target_position[0],target_position[1],x_speed)
+        if target_position[2] < 1.0:
+            target_position[2] = 1.0
         self.send_move_cmd(x_speed,y_speed, target_angle, target_position[2])
 
-
-
+    def reached(self, dist):
+        if dist < 3:
+            return True
+        else:
+            return False
 
     def process_uav_msg(self):
         self.pose = [self.uav_msg['active_uav']['location'][0],
                      self.uav_msg['active_uav']['location'][1],
                      self.uav_msg['active_uav']['altitude'],
                      self.uav_msg['active_uav']['heading']]
-
 
     def get_formation_data(self):
         self.guide_location = [
@@ -228,28 +260,6 @@ class KagUAV(BaseUAV):
             if nearest['id'] == self.uav_id:
                 self.formation_id = cx
             uav_position_list.pop(pop_id)
-
-
-    def amifallback(self):
-        fuel=self.uav_msg['active_uav']["fuel_reserve"]
-        if self.start_loc==None:
-            pass
-        if self.fallback==False:
-            knot=20/3
-            dist= util.dist(self.start_loc,[self.uav_msg['active_uav']['location'][0],self.uav_msg['active_uav']['location'][1]])
-            #knot to kmh
-            dist=dist*1.852
-            #aradaki knot mesafe * knot basina harcanan yakit.
-            fuel_=dist*knot
-
-            if fuel>fuel_:
-                pass
-            if fuel<fuel_:
-                self.fallback=True
-        if self.fallback==True:
-            pass
-
-
 
     def rotateUndTranslate(self, formation_array, angle, pivot):
         for i in range(len(formation_array)):
@@ -361,12 +371,6 @@ class KagUAV(BaseUAV):
         print("turev",self.Kd * self.Cd)
         print("int",self.Ki * self.Ci)
         print("p :",self.Kp * self.Cp)
-        file2=open("test15.txt",'a')
-        data=file2.write(str(error))
-        data=file2.write(" ")
-        data=file2.write(str(self.uav_msg["sim_time"]))
-        data=file2.write(" ; ")
-        file2.close()
         return (
             (self.Kp * self.Cp)    # proportional term
             + (self.Ki * self.Ci)  # integral term
@@ -390,6 +394,7 @@ class KagUAV(BaseUAV):
                 self.fallback=True
         if self.fallback==True:
             pass
+
 #####################################################################################################
 # y = 0.24005X - 0.49546
     def getXY(self,x,y,speed):
@@ -426,3 +431,4 @@ class KagUAV(BaseUAV):
         aci=math.atan2(fark[0],fark[1])
         angle=math.degrees(aci)
         return angle
+ 
