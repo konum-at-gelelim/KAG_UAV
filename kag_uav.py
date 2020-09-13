@@ -12,7 +12,6 @@ class KagUAV(BaseUAV):
         self.start_loc=None
         self.temp = 0
         self.pid_flag=False
-            #
         self.target_position = None
         self.SIZE = 600
         self.COUNT = 10
@@ -51,11 +50,19 @@ class KagUAV(BaseUAV):
         self.pre_sim_time = 0.0
         self.heading = None
         self.lock_heading = False
-
+        self.brake_limit = 100
+        self.brake_timer = 100
         # k = 1 unit of [*_speed] /  1 uint of [sim_time]
         #change of location -> (speed * time) * k
+        self.interrupt_loc = None
+        self.injury_operation_phase = 1
+        self.injury_load_phase = 0
+        self.load_time = float(self.params['injured_pick_up_duration'])
+        self.unload_time = float(self.params['injured_release_duration'])
+        self.injury_timer = None
         self.time = None
-        self.gps_heading
+        self.gps_heading = None
+        self.gps_alt = None
         self.k = 0.0005144444
         self.gps_noise_loc=[0,0]
         self.x = None
@@ -64,6 +71,7 @@ class KagUAV(BaseUAV):
         self.averagehead = None
         self.xloc = None
         self.yloc = None
+        self.alt_lock = None
         self.cruise_control = False
 
     def act(self):
@@ -80,40 +88,127 @@ class KagUAV(BaseUAV):
         if self.operation_phase == 3:
             self.move_to_target(self.home)
         elif self.operation_phase == 1:
-            if self.uav_msg['uav_guide']['gps_noise_flag']==False:
-                self.gps_noise_loc=[self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
-                self.gps_heading = self.uav_msg["active_uav"]['heading']
+            #if self.uav_msg['uav_guide']['gps_noise_flag']==False:
+            #    self.gps_noise_loc=[self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
+            #    self.gps_heading = self.uav_msg["active_uav"]['heading']
             if not self.uav_msg['uav_guide']['dispatch']:
-                self.get_formation_data()
-                if self.formation_type == 'arrow':
-                    self.formation['arrow'] = self.arrow_gen(self.guide_location, self.a_b, self.a_k, self.u_b, self.u_k, self.uav_count)
-                else:
-                    self.formation['prism'] = self.prism_gen(self.guide_location, self.a_k, self.u_b, self.u_k, self.uav_count)
-                if self.pick_formation_id:
-                    self.set_formation_id()
-                    self.pick_formation_id = False
-                self.target_position = self.formation[self.formation_type][self.formation_id]
                 if self.uav_msg['uav_guide']['gps_noise_flag']:
-                    self.speed_calc()
-                    self.gps_move(self.target_position)
+                    self.gps_move()
                 else:
-                    self.move_to_target(self.target_position)
-
+                    self.formation_setup()
+                    self.gps_alt = self.pose[2]
+                    self.formation_move(self.target_position)
             else:
-                self.operation_phase += 1
+                self.send_move_cmd(0, 0, 100.0,self.target_position[2])
+                if self.uav_id == 0:
+                    self.operation_phase += 1
         elif self.operation_phase == 2:
-            pass
+            if self.injury_operation_phase:
+                A = [198.297, 77.702, float(self.params['injured_pick_up_height'])]
+                B = [125.0, -440.0, float(self.params['injured_release_height'])]
+                self.injury_operation(A, B)
+                print(self.injury_operation_phase, self.injury_load_phase)
         else:
             if self.uav_msg['uav_guide']['dispatch']:
-                self.send_move_cmd(0, 0, self.uav_msg['uav_guide']['heading'], 100.0)
+                self.formation_setup()
+                self.formation_move(self.target_position)
             else:
                 self.operation_phase += 1
 
+    def injury_operation(self, injured_xy, hospital_xy):
+        if self.interrupt_loc == None:
+            self.interrupt_loc = [self.pose[0], self.pose[1], self.pose[2]]
+        if self.injury_operation_phase == 1:
+            self.injury_load_process(injured_xy, 'load')
+        elif self.injury_operation_phase == 2:
+            self.injury_load_process(hospital_xy, 'unload')
+        else:
+            self.injury_operation_phase = 0
+            print('hoooraaaaa! We saved mother russia!')
+            pass
 
+    def injury_load_process(self, target, load_type):
+        if self.injury_load_phase == 0:
+            d = util.dist(self.pose[:2], target[:2])
+            if not self.reached(d):
+                self.move_to_target((target[:2] + [90.0]))
+            else:
+                self.injury_load_phase += 1
+        elif self.injury_load_phase == 1:
+            print(self.alt_lock == self.pose[2], self.alt_lock, self.pose[2])
+            if self.pose[2] < (target[2] - 2.0):
+                print('a')
+                if self.alt_lock == None:
+                    print('b')
+                    self.alt_lock = float((target[2] - 2.0))
+                elif self.is_load_done(load_type):
+                    print('d')
+                    self.injury_load_phase += 1
+                print('z')
+                self.send_move_cmd(0.0, 0.0, self.pose[3], self.alt_lock)
+            else:
+                print('x')
+                self.send_move_cmd(0.0, 0.0, self.pose[3], 2.5)
+        elif self.injury_load_phase == 2:
+            if self.pose[2] < 90.0:
+                self.send_move_cmd(0, 0, self.pose[3], 100.0)
+            else:
+                self.send_move_cmd(0, 0, self.pose[3], self.pose[2])
+                self.injury_load_phase = 0
+                self.injury_operation_phase += 1
+                
 
+    def is_load_done(self, load_type):
+    	if self.injury_timer == None:
+    		self.injury_timer = self.uav_msg['sim_time']
+        if load_type == 'load':
+            if self.uav_msg['sim_time'] - self.injury_timer > (self.load_time * 1000):
+                self.injury_timer = None
+                return True
+            else:
+            	print((self.uav_msg['sim_time'] - self.injury_timer), self.alt_lock, self.pose[2], self.alt_lock == self.pose[2])
+                return False
+        else:
+            if self.uav_msg['sim_time'] - self.injury_timer > (self.load_time * 1000):
+                self.injury_timer = None
+                return True
+            else:
+            	print((self.uav_msg['sim_time'] - self.injury_timer), self.alt_lock, self.pose[2], self.alt_lock == self.pose[2])
+                return False
 
-    def gps_move(self,target):
-        self.send_move_cmd(0, 0, 270.0, 1.0, task="KEKW")
+    def formation_setup(self):
+        self.get_formation_data()
+        if self.formation_type == 'arrow':
+            self.formation['arrow'] = self.arrow_gen(self.guide_location, self.a_b, self.a_k, self.u_b, self.u_k, self.uav_count)
+        else:
+            self.formation['prism'] = self.prism_gen(self.guide_location, self.a_k, self.u_b, self.u_k, self.uav_count)
+        if self.pick_formation_id:
+            self.set_formation_id()
+            self.pick_formation_id = False
+        self.target_position = self.formation[self.formation_type][self.formation_id]
+        print(self.formation[self.formation_type])
+
+    def gps_move(self):
+        self.brake_timer = 0
+        xv = self.uav_msg['uav_guide']['speed']['x']
+        heading = self.uav_msg['uav_guide']['heading'] % 360.0
+        self.send_move_cmd(xv, 0, heading, self.gps_alt)
+
+    def formation_move(self, target_position):
+        dist = util.dist(target_position, self.pose)
+        target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
+        target_angle = math.degrees(target_angle) % 360.0
+        x_speed = self.uav_msg['uav_guide']['speed']['x']
+        if self.brake_timer < self.brake_limit:
+            self.brake_timer += 1
+            target_angle = self.pose[3]
+            x_speed = 0
+        else:
+            if not self.reached(dist):
+                x_speed += dist * 0.125
+        if target_position[2] < 1.0:
+            target_position[2] = 1.0
+        self.send_move_cmd(x_speed, 0.0, target_angle, target_position[2])
 
     def speed_calc(self):
         if(self.temp >= 1):
@@ -170,24 +265,25 @@ class KagUAV(BaseUAV):
         dist = util.dist(target_position, self.pose)
         target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
         target_angle = math.degrees(target_angle)
-        dist = util.dist(target_position, self.pose)
         x_speed = 90
         x_speed,y_speed=self.getXY(target_position[0],target_position[1],x_speed)
+        if target_position[2] < 1.0:
+            target_position[2] = 1.0
+        if dist > 30.0:
+        	x_speed = 20.0
         self.send_move_cmd(x_speed,y_speed, target_angle, target_position[2])
 
-    def reached(self):
-        dist = util.dist(self.target_position, self.pose)
+    def reached(self, dist):
         if dist < 3:
-            self.cruise_control = True
+            return True
         else:
-            self.cruise_control = False
+            return False
 
     def process_uav_msg(self):
         self.pose = [self.uav_msg['active_uav']['location'][0],
                      self.uav_msg['active_uav']['location'][1],
                      self.uav_msg['active_uav']['altitude'],
                      self.uav_msg['active_uav']['heading']]
-
 
     def get_formation_data(self):
         self.guide_location = [
@@ -345,9 +441,9 @@ class KagUAV(BaseUAV):
         self.Cd=self.Cd*100
         self.previous_time = current_time#ms
         self.previous_error = error
-        print("turev",self.Kd * self.Cd)
-        print("int",self.Ki * self.Ci)
-        print("p :",self.Kp * self.Cp)
+        #print("turev",self.Kd * self.Cd)
+        #print("int",self.Ki * self.Ci)
+        #print("p :",self.Kp * self.Cp)
         return (
             (self.Kp * self.Cp)    # proportional term
             + (self.Ki * self.Ci)  # integral term
@@ -387,15 +483,15 @@ class KagUAV(BaseUAV):
         yy=math.sin(head)
         xx=math.cos(head)
         dist = util.dist(target_position, self.pose)
-        print(dist)
+        #print(dist)
         self.PID(0.5,0.0,35.0)
         hm=self.Update(dist)
-        print(hm)
+        #print(hm)
         if hm>90:
             hm=90
         xx=xx*hm
         yy=yy*hm
-        print("istenen:",xx,yy)
+        #print("istenen:",xx,yy)
         return xx,yy
 
     def findAngle(self,x,y):
@@ -408,3 +504,4 @@ class KagUAV(BaseUAV):
         aci=math.atan2(fark[0],fark[1])
         angle=math.degrees(aci)
         return angle
+ 
