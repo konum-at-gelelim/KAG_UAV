@@ -13,3 +13,6 @@ def getSin(angle_in_degree):
 
 def getCos(angle_in_degree):
     return math.cos(math.radians(angle_in_degree))
+
+def getMeter(altitude):
+    return altitude * 0.3048
