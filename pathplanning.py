@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 from scipy.spatial import ConvexHull
-import matplotlib as mpl
+#import matplotlib as mpl
 
 
 with open('wtf.json') as f:
@@ -306,8 +306,6 @@ def unpacked_cluster(clusters,width):
             tmp=[clusters[i][j][0]-float((width/2)),clusters[i][j][1]+float((width/2))]
             tmps=[[tmp[0],tmp[1]],[tmp[0]+width,tmp[1]],[tmp[0]+width,tmp[1]-width],[tmp[0],tmp[1]-width]]
             mask_for_cluster[i].append(tmps)
-            
-            
     return mask_for_cluster
 
 def findPath(hashno,allpoints_dict,px):
@@ -414,6 +412,8 @@ def angle_between(p1, p2):
     return np.rad2deg((ang1 - ang2) % (2 * np.pi))
 
 def findTurnSide(denied,instantloc,finish):
+    if denied==0:
+        return 0
     point=denied
     point=np.array(point)
     xx = point[:,0]
@@ -425,7 +425,7 @@ def findTurnSide(denied,instantloc,finish):
     new_centerofdenied=[centerofdenied[0]-x,centerofdenied[1]-y]  
     new_finish=[finish[0]-x,finish[1]-y]
     angle=angle_between(new_finish,new_centerofdenied)
-    return angle    
+    return angle   
 
     
 def findRotationPath(deniedzones,allpath,start,finish,px):
@@ -437,116 +437,138 @@ def findRotationPath(deniedzones,allpath,start,finish,px):
     x_px=deltax/distance_px
     y_px=deltay/distance_px
     start_t=start
-    quitt=True
     A=0
     B=0
     C=0
-    while quitt:
-        
+    #planA
+    i=0
+    rotationPath.append(start_t)
+    for i in range(int(distance_px)):
+        make_point=[start_t[0]+x_px,start_t[1]+y_px]
+        start_t=make_point
+        rotationPath.append(make_point)
+        distance=dist(start_t,finish)
+        pack=point_control(deniedzones,make_point)
+        if pack[0]==True:
+            A=1
+    tempA=rotationPath
+    rotationPath=[]
+    start_t=start
+    #planB
+    i=0
+    rotationPath.append(start_t)
+    for i in range(int(distance_px)):
+        make_point=[start_t[0]+x_px,start_t[1]]
+        start_t=make_point
+        rotationPath.append(make_point)
+        distance=dist(start_t,finish)
+        pack=point_control(deniedzones,make_point)
+        if pack[0]==True:
+            B=1
+        #print(distance)
+    i=0
+    for i in range(int(distance_px)):
+        make_point=[start_t[0],start_t[1]+y_px]
+        start_t=make_point
+        rotationPath.append(make_point)
+        distance=dist(start_t,finish)
+        pack=point_control(deniedzones,make_point)
+        if pack[0]==True:
+            B=1
+        #print(distance)
+    tempB=rotationPath
+    rotationPath=[]
+    #planC
+    start_t=start
+    i=0
+    rotationPath.append(start_t)
+    for i in range(int(distance_px)):
+        make_point=[start_t[0],start_t[1]+y_px]
+        start_t=make_point
+        rotationPath.append(make_point)
+        distance=dist(start_t,finish)
+        pack=point_control(deniedzones,make_point)
+        if pack[0]==True:
+            C=1
+        #print(distance)
+    i=0
+    for i in range(int(distance_px)):
+        make_point=[start_t[0]+x_px,start_t[1]]
+        start_t=make_point
+        rotationPath.append(make_point)
+        distance=dist(start_t,finish)
+        pack=point_control(deniedzones,make_point)
+        if pack[0]==True:
+            C=1
+    tempC=rotationPath
+    rotationPath=[tempA,tempB,tempC]
+    if A==0:
+        rotationPath=tempA
+    elif B==0:
+        rotationPath=tempB
+    elif C==0:
+        rotationPath=tempC
+    start_t=start
+    if A==1 and B==1 and C==1:
         #planA
-        i=0
-        rotationPath.append(start_t)
-        for i in range(int(distance_px)):
-            make_point=[start_t[0]+x_px,start_t[1]+y_px]
-            start_t=make_point
-            rotationPath.append(make_point)
-            distance=dist(start_t,finish)
-            pack=point_control(deniedzones,make_point)
-            if pack[0]==True:
-                A=1
-        tempA=rotationPath
         rotationPath=[]
-        
-        
-        start_t=start
-        #planB
         i=0
+        dodge=0
         rotationPath.append(start_t)
-        for i in range(int(distance_px)):
-            make_point=[start_t[0]+x_px,start_t[1]]
-            start_t=make_point
-            rotationPath.append(make_point)
-            distance=dist(start_t,finish)
-            pack=point_control(deniedzones,make_point)
+        whiledist=dist(start,finish)
+        while whiledist>10:
+            #come=dist(finish,start_t)
+            aci=math.atan2(start_t[0]-finish[0],start_t[1]-finish[1])
+            aci=math.degrees(aci)
+            if dodge==0:
+                make_point=[start_t[0]+x_px,start_t[1]+y_px]
+                pack=point_control(deniedzones,make_point)
+            if dodge==0 and pack[0]==False:
+                rotationPath.append(make_point)
+                start_t=make_point
             if pack[0]==True:
-                B=1
-            #print(distance)
-        i=0
-        for i in range(int(distance_px)):
-            make_point=[start_t[0],start_t[1]+y_px]
-            start_t=make_point
-            rotationPath.append(make_point)
-            distance=dist(start_t,finish)
-            pack=point_control(deniedzones,make_point)
-            if pack[0]==True:
-                B=1
-            #print(distance)
-        tempB=rotationPath
-        rotationPath=[]
-   
-
-         
-        #planC
-        start_t=start
-        i=0
-        rotationPath.append(start_t)
-        for i in range(int(distance_px)):
-            make_point=[start_t[0],start_t[1]+y_px]
-            start_t=make_point
-            rotationPath.append(make_point)
-            distance=dist(start_t,finish)
-            pack=point_control(deniedzones,make_point)
-            if pack[0]==True:
-                C=1
-            #print(distance)
-        i=0
-        for i in range(int(distance_px)):
-            make_point=[start_t[0]+x_px,start_t[1]]
-            start_t=make_point
-            rotationPath.append(make_point)
-            distance=dist(start_t,finish)
-            pack=point_control(deniedzones,make_point)
-            if pack[0]==True:
-                C=1
-        tempC=rotationPath
-        rotationPath=[tempA,tempB,tempC]
-        if A==0:
-            rotationPath=tempA
-        elif B==0:
-            rotationPath=tempB
-        elif C==0:
-            rotationPath=tempC
-        if A==1 and B==1 and C==1:
-            #planA
-            rotationPath=[]
-            i=0
-            dodge=0
-            rotationPath.append(start_t)
-            for i in range(int(distance_px)):
-                if dodge==0:
-                    make_point=[start_t[0]+x_px,start_t[1]+y_px]
-                    pack=point_control(deniedzones,make_point)
-                if pack[0]==True:
-                    dodge=1
-                if dodge==1:
-                    #angle=findTurnSide(pack[1],start_t,finish)
-                    point_pack=[[start_t[0]+10,start_t[1]],
-                               [start_t[0],start_t[1]+10],
-                               [start_t[0]-10,start_t[1]],
-                               [start_t[0],start_t[1]]-10,]
-                    distt=dist(start_t,point_pack[0])
-                    lowest=distt
-                    loc=point_pack[0]
-                    for i in range(4):
-                        pack=point_control(deniedzones,point_pack[i])
-                        if lowest >dist(start_t,point_pack[i]) and pack[0]==False:
-                            lowest=dist(start_t,point_pack[i])
-                            loc=point_pack[i]
-                    start_t=loc
-                    rotationPath.append(start_t)
-                        
-
-        quitt=False
+                dodge=1
+            if dodge==1:
+                make_point=[start_t[0],start_t[1]]
+                angle=findTurnSide(pack[1],start_t,finish)
+                if aci<=-45 and aci>=-135:
+                    if angle>0 and angle<180:
+                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]+10]]
+                    if angle<360 and angle>180:
+                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]-10]]
+                if aci<=45 and aci>=-45:
+                    if angle>0 and angle<180:
+                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]-10]]
+                    if angle<360 and angle>180:
+                        point_pack=[[start_t[0]-10,start_t[1]],[start_t[0],start_t[1]-10]]
+                if aci>=45 and aci<=135:
+                    if angle>0 and angle<180:
+                        point_pack=[[start_t[0]-10,start_t[1]],[start_t[0],start_t[1]-10]]
+                    if angle<360 and angle>180:
+                        point_pack=[[start_t[0],start_t[1]+10],[start_t[0]-10,start_t[1]]]
+                if (aci>=135 and aci<=180) or (aci<=-135 and aci>=-180):
+                    if angle>0 and angle<180:
+                        point_pack=[[start_t[0],start_t[1]+10],[start_t[0]-10,start_t[1]]]
+                    if angle<360 and angle>180:
+                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]+10]]
+                angle=findTurnSide(pack[1],start_t,finish)    
+                a=0
+                for i in range(len(point_pack)):
+                    pack1=point_control(deniedzones,point_pack[i-a])
+                    if pack1[0]==True:
+                        point_pack.pop(i-a)
+                        a=a+1  
+                distt=dist(finish,point_pack[0])
+                lowest=distt
+                loc=point_pack[0]
+                for i in range(len(point_pack)):
+                    pack2=point_control(deniedzones,point_pack[i])
+                    if lowest >dist(finish,point_pack[i]) and pack2[0][0]==False:
+                        lowest=dist(finish,point_pack[i])
+                        loc=point_pack[i]
+                start_t=loc
+                whiledist=dist(start_t,finish)
+                rotationPath.append(start_t)
     return rotationPath
         
     
@@ -695,12 +717,14 @@ for i in range(len(subareas)):
 
 
 
-ornek1=[-150,50]
+bitir=[232,467]
 ornek2=[-9,66]
-ornek3=[131,-112]
+basla=[515,473]
 
 #angle=findTurnSide(ornek2,ornek3,ornek1)
-rotationpath=findRotationPath(data["denied_zones"],ornek1,ornek3,ornek1,10)
+rotationpath=findRotationPath(data["denied_zones"],ornek2,basla,bitir,10)
+
+
 
 #görüntü bölgesi
             
@@ -714,6 +738,9 @@ for i in range(len(all_denied)):
 k = PatchCollection(patches)
 ax.add_collection(k)
 
+
+#plt.plot(bitir[0], bitir[1], 'go')
+#plt.plot(basla[0], basla[1], 'bo')
 
 
 """
