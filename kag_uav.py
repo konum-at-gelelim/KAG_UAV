@@ -137,17 +137,12 @@ class KagUAV(BaseUAV):
         elif self.injury_load_phase == 1:
             print(self.alt_lock == self.pose[2], self.alt_lock, self.pose[2])
             if self.pose[2] < (target[2] - 2.0):
-                print('a')
                 if self.alt_lock == None:
-                    print('b')
                     self.alt_lock = float((target[2] - 2.0))
                 elif self.is_load_done(load_type):
-                    print('d')
                     self.injury_load_phase += 1
-                print('z')
                 self.send_move_cmd(0.0, 0.0, self.pose[3], self.alt_lock)
             else:
-                print('x')
                 self.send_move_cmd(0.0, 0.0, self.pose[3], 2.5)
         elif self.injury_load_phase == 2:
             if self.pose[2] < 90.0:
@@ -186,7 +181,6 @@ class KagUAV(BaseUAV):
             self.set_formation_id()
             self.pick_formation_id = False
         self.target_position = self.formation[self.formation_type][self.formation_id]
-        print(self.formation[self.formation_type])
 
     def gps_move(self):
         self.brake_timer = 0
@@ -301,17 +295,16 @@ class KagUAV(BaseUAV):
         self.u_k = self.uav_msg['uav_formation']['u_k']
 
     def set_formation_id(self):
-        uav_position_list = []
         nearest = {'id': -1, 'dist': 0}
-        prefix = 'uav_'
-        for id in range(len(self.uav_msg['uav_link'])):
-            #print id, self.uav_msg['uav_link'][id][prefix + str(id)]['location']
-            uav_position_list.append([
-                id,
-                float(self.uav_msg['uav_link'][id][prefix + str(id)]['location'][0]),
-                float(self.uav_msg['uav_link'][id][prefix + str(id)]['location'][1]),
-                float(self.uav_msg['uav_link'][id][prefix + str(id)]['altitude'])
-            ])
+        uav_position_list = []
+        for uav_link_count in range(len(self.uav_msg['uav_link'])):
+            for prefix_id in self.uav_msg['uav_link'][uav_link_count]:
+                uav_position_list.append([
+                    int(prefix_id[4:]),
+                    float(self.uav_msg['uav_link'][uav_link_count][prefix_id]['location'][0]),
+                    float(self.uav_msg['uav_link'][uav_link_count][prefix_id]['location'][1]),
+                    float(self.uav_msg['uav_link'][uav_link_count][prefix_id]['altitude'])
+                ])
         cx = -1
         for node in self.formation[self.formation_type]:
             cx += 1
