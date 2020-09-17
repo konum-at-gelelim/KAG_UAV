@@ -17,10 +17,10 @@ from scipy.spatial import ConvexHull
 
 with open('wtf.json') as f:
     data = json.load(f)
-    
+
 def point_control(zones,point):
     i=0
-    
+
     tik=0
     for i in range (len(zones)):
         bolge=mpltPath.Path(zones[i])
@@ -29,38 +29,38 @@ def point_control(zones,point):
             tik=1
             pack=[inside,zones[i]]
             return pack
-            
+
         if tik==0:
             pack=[inside,0]
-            
+
     return pack
 
 def slice_control(dilim,bas,sinir,ustsinir,zones,data,px):
     pack=[]
     start=1
-    
+
     for i in range(int(bas),sinir,-px):
         make_point=[dilim,i]
         inside=point_control(zones,make_point)
-        
+
         if (start==1) and (inside[0][0]==False):
             upper=make_point
             start=0
-            
+
         if start==0:
-            
-            if (inside[0][0]==True) or (i-px<=sinir): 
+
+            if (inside[0][0]==True) or (i-px<=sinir):
                 if inside[0][0]==True:
                     ustsinir=inside[1]
                 lower=make_point
                 if inside[0][0]==True:
                     pack=[upper,lower,inside[1],ustsinir]
-                    
+
                     return pack
                 if inside[0][0]==False:
                     pack=[upper,lower,0,ustsinir]
-                    
-                    return pack    
+
+                    return pack
     return pack
 
 def unpack (zone,dilim,data,px):
@@ -75,7 +75,7 @@ def unpack (zone,dilim,data,px):
         make_point=[dilim,top]
         top=top-px
         pack=point_control([zone],make_point)
-        
+
         if pack[0][0]==True:
             start=[make_point,zone,zone_stop]
             break
@@ -105,7 +105,7 @@ def BCD(zones,area,data,px):
         paket=slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
 
         if start==1:
-            
+
             altsinir=paket[2]
             ustsinir=paket[3]
             upper.append(paket[0])
@@ -117,8 +117,8 @@ def BCD(zones,area,data,px):
             upper.append(paket[0])
             lower.append(paket[1])
             dilim=dilim+px
-            
-        
+
+
         if start==0:
 
             if (altsinir!=paket[2]) or (ustsinir!=paket[3]):
@@ -126,7 +126,7 @@ def BCD(zones,area,data,px):
                     denied_start=dilim
                 temp=[]
                 temp=lower[::-1]
-                
+
 
                 cell=temp+upper
                 cells.append(cell)
@@ -135,17 +135,17 @@ def BCD(zones,area,data,px):
                 upper=[]
                 altsinir=paket[2]
                 ustsinir=paket[3]
-                
-                
+
+
             if paket[2]!=0:
-                
+
                 new_start=unpack(paket[2],denied_start,data,px)
                 if new_start[0] not in stack_point:
                     stack_area.append(new_start[1])
                     stack_point.append(new_start[0])
                     stack_stop.append(new_start[2])
 
-                
+
             if dilim>solsinir and len(stack_point)!=0:
                 temp=[]
                 temp=lower[::-1]
@@ -158,14 +158,14 @@ def BCD(zones,area,data,px):
                 upper=[]
                 altsinir=paket[2]
                 ustsinir=paket[3]
-                
+
                 pop=stack_point.pop()
                 stack_area.pop()
                 zone_stop=stack_stop.pop()
                 dilim=pop[0]
                 bas=pop[1]
                 solsinir=int(zone_stop)
-                    
+
 
             if dilim>solsinir and len(stack_point)==0:
                 temp=[]
@@ -173,7 +173,7 @@ def BCD(zones,area,data,px):
 
                 cell=temp+upper
                 cells.append(cell)
-                
+
                 break
     return cells
 tall_index = 0
@@ -323,7 +323,7 @@ def findPath(hashno,allpoints_dict,px):
             new_path.append([make_point[0],make_point[1]+px])
             make_point=[make_point[0],make_point[1]+px]
             continue
-        
+
         elif [make_point[0]+px,make_point[1]] in points:
             back=0
             points.remove([make_point[0]+px,make_point[1]])
@@ -346,14 +346,14 @@ def findPath(hashno,allpoints_dict,px):
 
         else:
             try:
-                
-                back=back+1  
+
+                back=back+1
                 make_point=new_path[-(2*back)]
                 new_path.append([make_point[0],make_point[1]])
             except:
                 break
-                
-    return new_path        
+
+    return new_path
 def sortSubareas(subareas,maxQ):
     sub_dist={}
     point=maxQ[0]
@@ -368,7 +368,7 @@ def sortSubareas(subareas,maxQ):
         y = point[:,1]
         temp_center = [sum(x) / len(point), sum(y) / len(point)]
         center=[(center[0]+temp_center[0])/2,(center[1]+temp_center[1])/2]
-    
+
     i=0
     for i in range(len(subareas)):
         hashno=str(hash(str(subareas[i])))
@@ -391,19 +391,19 @@ def sortSubareas(subareas,maxQ):
     temp=0
     for j in range(len(hashkeys)):
         for i in range(len(hashkeys)):
-            
+
             low=-sub_dist[hashkeys[i]]
             if temp>low:
                 temp=low
                 hashkey=hashkeys[i]
                 index=i
-                
-        if hashkey not in hashlist: 
+
+        if hashkey not in hashlist:
             hashlist.append(hashkey)
-            
+
             sub_dist.pop(hashkey)
             hashkeys.pop(index)
-            
+
             temp=0
     return hashlist
 def angle_between(p1, p2):
@@ -422,13 +422,13 @@ def findTurnSide(denied,instantloc,finish):
 
     x=instantloc[0]
     y=instantloc[1]
-    new_centerofdenied=[centerofdenied[0]-x,centerofdenied[1]-y]  
+    new_centerofdenied=[centerofdenied[0]-x,centerofdenied[1]-y]
     new_finish=[finish[0]-x,finish[1]-y]
     angle=angle_between(new_finish,new_centerofdenied)
-    return angle   
+    return angle
 
-    
-def findRotationPath(deniedzones,allpath,start,finish,px):
+
+def findRotationPath(deniedzones,start,finish,px):
     deltax=finish[0]-start[0]
     deltay=finish[1]-start[1]
     distance=dist(start,finish)
@@ -551,13 +551,13 @@ def findRotationPath(deniedzones,allpath,start,finish,px):
                         point_pack=[[start_t[0],start_t[1]+10],[start_t[0]-10,start_t[1]]]
                     if angle<360 and angle>180:
                         point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]+10]]
-                angle=findTurnSide(pack[1],start_t,finish)    
+                angle=findTurnSide(pack[1],start_t,finish)
                 a=0
                 for i in range(len(point_pack)):
                     pack1=point_control(deniedzones,point_pack[i-a])
                     if pack1[0]==True:
                         point_pack.pop(i-a)
-                        a=a+1  
+                        a=a+1
                 distt=dist(finish,point_pack[0])
                 lowest=distt
                 loc=point_pack[0]
@@ -570,8 +570,8 @@ def findRotationPath(deniedzones,allpath,start,finish,px):
                 whiledist=dist(start_t,finish)
                 rotationPath.append(start_t)
     return rotationPath
-        
-    
+
+
 
 
 
@@ -589,7 +589,7 @@ for i in range(cluster_count+1):
     clusters.append([])
 for i in special_assets:
     clusters[i["c"]].append(i["p"])
-        
+
 mask_for_cluster=unpacked_cluster(clusters,75)
 merge_tall=[]
 temp_mask_for_cluster=[]
@@ -599,6 +599,8 @@ for j in range(len(mask_for_cluster)):
     merge_tall=np.array(merge_tall)
     temp_mask_for_cluster.append(merge_tall)
     merge_tall=[]
+
+
 i=0
 maxQ_Areas=[]
 for i in range(1,len(temp_mask_for_cluster)):
@@ -607,11 +609,6 @@ for i in range(1,len(temp_mask_for_cluster)):
     temp=list(points[hull.vertices])
     maxQ_Areas.append(temp)
 
-
-    
-    
-
- 
 
 tall_locs_=[]
 for t in range(len(data["special_assets"])):
@@ -659,20 +656,20 @@ sorted_subareas=sortSubareas(subareas,maxQ_Areas)
 for i in range(len(sorted_subareas)):
     temp.append(subarea_dict[sorted_subareas[i]])
 sorted_subareas=temp
+#kucukten buyuge
 sorted_subareas=sorted_subareas[::-1]
 
 #temp=[]
 #for i in range(len(sorted_subareas)):
 #    temp.append(subarea_dict[sorted_subareas[i]])
 #sorted_subareas=temp
-    
-    
-    
-sorted_subareas=maxQ_Areas+sorted_subareas
-    
 
+
+
+sorted_subareas=maxQ_Areas+sorted_subareas
 
 subareas=maxQ_Areas+subareas
+
 
 
 path_for_subareas={}
@@ -682,7 +679,7 @@ for path_point in range(0,data["world_length"],10):
     for path_point1 in range (0,data["world_width"],10):
         make_point=[top_right[0]-path_point,top_right[1]-path_point1]
         ekle=1
-        
+
         for i in range (len(all_denied)):
             paths=mpltPath.Path(all_denied[i])
             inside=paths.contains_points([make_point])
@@ -694,25 +691,25 @@ for path_point in range(0,data["world_length"],10):
             pack=point_control(subareas,make_point)
             hashh=hash(str(pack[1]))
             if str(str(hashh)) in path_for_subareas:
-                
+
                 temp=path_for_subareas[str(hashh)]
                 temp.append(make_point)
                 path_for_subareas[str(hashh)]=temp
             else:
                 path_for_subareas[str(hashh)]=[make_point]
-            
+
             #path.append(make_point)
 
 
-        
-          
-    
+
+
+
 #tüm bölgelere yol cizildi
 for i in range(len(subareas)):
     hashh=hash(str(subareas[i]))
     new_path=findPath(hashh,path_for_subareas,10)
     path_for_subareas[str(hashh)]=new_path
-    
+
 
 
 
@@ -722,12 +719,12 @@ ornek2=[-9,66]
 basla=[515,473]
 
 #angle=findTurnSide(ornek2,ornek3,ornek1)
-rotationpath=findRotationPath(data["denied_zones"],ornek2,basla,bitir,10)
+#rotationpath=findRotationPath(data["denied_zones"],ornek2,basla,bitir,10)
 
 
 
 #görüntü bölgesi
-            
+
 #girilmesi yasak bölgeler
 fig, ax = plt.subplots()
 patches=[]
@@ -749,7 +746,7 @@ patches=[]
 for i in range(len(subareas)):
     polygon = Polygon(subareas[i])
     patches.append(polygon)
-    
+
 colors = 100*np.random.rand(len(patches))
 k = PatchCollection(patches, alpha=0.4)
 k.set_array(np.array(colors))
@@ -761,11 +758,13 @@ fig.colorbar(k, ax=ax)
 
 
 
+
 patches=[]
 for i in range(len(sorted_subareas)):
     polygon = Polygon(sorted_subareas[i])
     patches.append(polygon)
 colors = np.ones(len(patches))
+
 
 for i in range(len(patches)):
     colors[i]=colors[i]*(i+1)
@@ -774,6 +773,7 @@ k = PatchCollection(patches, alpha=0.4)
 k.set_array(np.array(colors))
 ax.add_collection(k)
 fig.colorbar(k, ax=ax)
+
 
 #cb1 = mpl.colorbar.ColorbarBase(k, cmap=cmap,
                                 #norm=norm,
@@ -786,6 +786,8 @@ fig.colorbar(k, ax=ax)
 #hashh=np.array(path_for_subareas[str(hashh)])
 #plt.plot(hashh[:,0],hashh[:,1],marker='.',color='black',linewidth=0)
 
+
+
 for i in range(len(subareas)):
     hashno=hash(str(subareas[i]))
     plot_path=path_for_subareas[str(hashno)]
@@ -794,17 +796,72 @@ for i in range(len(subareas)):
 
 
 
+# ==================test===========================================================
 
-rotationplot=np.array(rotationpath)
-plt.plot(rotationplot[:,0], rotationplot[:,1], 'r-')
+hashno=hash(str(subareas[2]))
+slow_path=path_for_subareas[str(hashno)]
+t_aci=None
+def findDRS(path_array):
+    drs_array=[]
+    for i in range(len(path_array)-2):
+        
+        
+        t_aci=math.atan2(path_array[i][0]-path_array[i+1][0],path_array[i][1]-path_array[i+1][1])
+        t_aci=math.degrees(t_aci)
+        aci=math.atan2(path_array[i+1][0]-path_array[i+2][0],path_array[i+1][1]-path_array[i+2][1])
+        aci=math.degrees(aci)
+    
+        if aci != t_aci:
+            make_point=[path_array[i][0],path_array[i][1]]
+            drs_array.append(make_point)
+    return drs_array
+        
+        
+hashno=hash(str(subareas[2]))
+rot_pat=path_for_subareas[str(hashno)]
+test_rotation=findRotationPath(data["denied_zones"],[3300,-310],rot_pat[0],10)
+test_rotation=np.array(test_rotation)
+plt.plot(test_rotation[:,0], test_rotation[:,1], 'r-')
+
+for i in range(len(test_rotation)-2):
+    
+    
+    t_aci=math.atan2(test_rotation[i][0]-test_rotation[i+1][0],test_rotation[i][1]-test_rotation[i+1][1])
+    t_aci=math.degrees(t_aci)
+    aci=math.atan2(test_rotation[i+1][0]-test_rotation[i+2][0],test_rotation[i+1][1]-test_rotation[i+2][1])
+    aci=math.degrees(aci)
+
+    if aci != t_aci:
+        plt.plot(test_rotation[i][0], test_rotation[i][1], 'g.')
+
+
+    #if aci==t_aci:
+        
+    #    t_aci=aci
+    #if aci!=t_aci:
+    #    print(aci,t_aci)
+    #    plt.plot(plot_path[:,0], plot_path[:,1], 'r.')
+    #    t_aci=aci
+        
 
 
 
 
+#rotationplot=np.array(rotationpath)
+#plt.plot(rotationplot[:,0], rotationplot[:,1], 'r-')
+# 
+# ===============================test==============================================
+
+sorted_keys=[]
+for i in range(len(sorted_subareas)):
+    x=str(hash(str(sorted_subareas[i])))
+    sorted_keys.append(x)
+    
 
 
 ax.autoscale_view()
 plt.show()
-
-
-    
+#print(sorted_keys)
+#print()
+#print()
+#print(path_for_subareas)
