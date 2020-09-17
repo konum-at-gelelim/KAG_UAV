@@ -830,8 +830,10 @@ for i in range(len(test_rotation)-2):
     t_aci=math.degrees(t_aci)
     aci=math.atan2(test_rotation[i+1][0]-test_rotation[i+2][0],test_rotation[i+1][1]-test_rotation[i+2][1])
     aci=math.degrees(aci)
+    aci=t_aci-aci
+    aci=math.sqrt(aci**2)
 
-    if aci != t_aci:
+    if aci>10:
         plt.plot(test_rotation[i][0], test_rotation[i][1], 'g.')
 
 
