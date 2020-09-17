@@ -3,6 +3,8 @@ from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 from scipy.spatial import ConvexHull
 import matplotlib.path as mpltPath
+from scipy import stats
+from numpy import arange
 import numpy as np
 import math
 import random
@@ -74,26 +76,27 @@ class KagUAV(BaseUAV):
         self.yloc = None
         self.alt_lock = None
         self.cruise_control = False
+        self.preheading = 380 # -360 ve +360 disinda bir deger koyuldu
 
     def act(self):
-        self.path_planning(self.params)
+        #self.path_planning(self.params)
         # umutun ve erenin codelari duzenlendi
         self.starting_func() # baslangic konum degerleri kayidi
         self.time_calc() # location_calc icin paket suresi guncellemesi
         self.speed_calc() # gps bozuklugu durumu speed hesabi
         self.location_calc() # gps bozuklugu durumu location hesabi
         self.process_uav_msg() # gps degerleri self.pose a aktarilir
-        #self.updateUAVLink() komsu ihalara lineer regresyon uygulayan sistem suanlik devredisi
+        self.updateUAVLink() # komsu ihalara lineer regresyon uygulayan sistem suanlik devredisi
         self.force_vector_calc() # carpismadan kacinma icin kuvvet hesabi
         self.col_avo() # kuvvetin iha dinamigine aktarimi
         self.brake_calc() # max speed hesabi
         print("self.operation_phase =", self.operation_phase)
-        self.poz = 2400, 300, 100
-        self.move_to_target(self.poz)
-        #self.pre_formation()
-        #self.formation_func() # formasyon motoru
-        #self.amifallback() # geri donus karar verme araci
-        #self.move_to_home() # eve donus komutu
+        #self.poz = 2400, 300, 100
+        #self.move_to_target(self.poz)
+        self.pre_formation()
+        self.formation_func() # formasyon motoru
+        self.amifallback() # geri donus karar verme araci
+        self.move_to_home() # eve donus komutu
 
     def acc_calc(self, Speed_diff):
         print("timediff for speed =", self.timediff)
@@ -145,11 +148,11 @@ class KagUAV(BaseUAV):
         print("real x and y speed = ", self.uav_msg['active_uav']['x_speed'], self.uav_msg['active_uav']['y_speed'])
 
     def ljp(self, r, epsilon, sigma):
-        if(r == self.uav_msg['uav_formation']['u_b'] - 2):
-            return 0
+        if(r <= self.uav_msg['uav_formation']['u_b'] - 2):
+            return 824604576
         else:
-            return 48 * epsilon * np.power(sigma, 12) / np.power(r-self.uav_msg['uav_formation']['u_b'] - 2, 13) \
-            - 24 * epsilon * np.power(sigma, 6) / np.power(r-self.uav_msg['uav_formation']['u_b'] - 2, 7)
+            return 48 * epsilon * np.power(sigma, 12) / np.power(r - (self.uav_msg['uav_formation']['u_b'] - 2), 13) \
+            - 24 * epsilon * np.power(sigma, 6) / np.power(r - (self.uav_msg['uav_formation']['u_b'] - 2), 7)
 
     def col_avo(self):
         colTempAngle = (self.uav_msg["active_uav"]['heading'] - self.collisionAngle - 90) % 360
@@ -208,6 +211,11 @@ class KagUAV(BaseUAV):
         if len(self.uav_msg['uav_link']) == 1:
             brake_var = 90
         self.maxSpeed = brake_var
+        if self.preheading != 380:
+            headingdiff = self.preheading - self.pose[3]
+            self.headingacc = headingdiff / self.timediff
+            print("heading ivme =", self.headingacc)
+        self.preheading = self.pose[3] # self.oldheading ile cakismasin diye farkli isim koyuldu
         #self.maxSpeed = abs(brake_temp / 5.6)
         #self.maxSpeed = 90 - self.maxSpeed
         print("max speed =", self.maxSpeed)
@@ -223,10 +231,10 @@ class KagUAV(BaseUAV):
             uav_name = self.uav_msg["uav_link"][i].keys()
             uav_name = uav_name[0][4:]
             if int(uav_name) != self.uav_id and self.uav_msg['uav_formation']['u_b'] - 10 >= abs(self.uav_msg["uav_link"][i].values()[0]["altitude"] - self.pose[2]):
-                print("col avo id =", int(uav_name))
                 distance = math.sqrt((self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])**2 + (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])**2)
                 distancex, distancey = (self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])/distance, (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])/distance
                 u = self.ljp(distance, self.LJP_EPSILON, self.LJP_SIGMA)
+                print("col avo id, distance and force=", int(uav_name), distance, u)
                 ux = ux + u*distancex
                 uy = uy + u*distancey
         self.collisionAngle = math.atan2(ux, -uy)
@@ -472,35 +480,56 @@ class KagUAV(BaseUAV):
     '''
     def updateUAVLink(self):
         data = self.prepareUAVLink()
-        for i in range(len(data)):
-            if(data[i][2] != -1 ): #veri guncellendiyse
+        if len(self.defter) == 0:
+            #print(len(data))
+            for i in range(len(data)):
+                list = []
+                self.defter.append(list)
+        #print("bum", self.defter)
+        if len(self.defter[0]) == 0:
+            for i in range(self.params['uav_count']):
                 #veriyi kullan
-                loc_y=data[i][0]
-                loc_x=data[i][1]
-                print(len(self.defter[i][0]))
-                if len(self.defter[i])<=12:
-                    self.defter[i][0].append(loc_x)
-                    self.defter[i][1].append(loc_y)
-                if len(self.defter[i][0]) == 12:
-                    self.defter[i][0].pop(0)
-                    self.defter[i][1].pop(0)
-                if self.uav_msg['uav_guide']['gps_noise_flag']:
-                    inds = arange(0,11) # bu nedir bilmorm
-                    slope, intercept, r_value, p_value, std_err = stats.linregress(inds, self.defter[i][0])
-                    linex = slope*inds+intercept
-                    tahminX=linex[5]
-                    slope, intercept, r_value, p_value, std_err = stats.linregress(inds,self.defter[i][0])
-                    liney = slope*inds+intercept
-                    tahminY=liney[5]
-                    print("tahmin",tahminX,tahminY)
-                    print("reel",loc_x,loc_y)
-        #return [tahminX,tahminY]
+                list = ['x']
+                self.defter[i].append(list)
+                list = ['y']
+                self.defter[i].append(list)
+        print("bum", self.defter)
+        #loc_x=data[i][0]
+        #loc_y=data[i][1]
+        #self.defter[iha_id][x or y][paket sirasi]
+        #print(self.defter[i])
+        for i in range(self.params['uav_count']):
+            if len(self.defter[i][0])<=12:
+                #print("defter", self.defter)
+                #print("i",i)
+                self.defter[i][0].append(data[i][0])
+                self.defter[i][1].append(data[i][1])
+            if len(self.defter[i][0]) == 12:
+                #print("defter", self.defter)
+                #print("i",i)
+                self.defter[i][0].pop(0)
+                self.defter[i][1].pop(0)
+                self.temp = self.temp + 1
+            #print(self.defter)
+            if self.uav_msg['uav_guide']['gps_noise_flag'] == True:
+                inds = arange(0,11) # bu nedir bilmorm
+                #print(self.defter[i][0])
+                slope, intercept, r_value, p_value, std_err = stats.linregress(inds, self.defter[i][0])
+                linex = slope*inds+intercept
+                tahminX=linex[5]
+                slope, intercept, r_value, p_value, std_err = stats.linregress(inds, self.defter[i][1])
+                liney = slope*inds+intercept
+                tahminY=liney[5]
+                print(i, "numarali ihanin tahmini konumu = ", tahminX, tahminY)
+                self.defter[i][0][9] = tahminX
+                self.defter[i][1][9] = tahminY
+                #print("reel", loc_x, loc_y)
 
     def prepareUAVLink(self):
         data = []
         if len(data) == 0:
-            print("bum")
-            for i in range(len(self.uav_msg['uav_link'])):
+            #print("bum")
+            for i in range(self.params['uav_count']):
                 loc = []
                 loc.append(0)
                 loc.append(0)
@@ -511,7 +540,7 @@ class KagUAV(BaseUAV):
             uav_name = uav_name[0][4:]
             if int(uav_name) != self.uav_id:
                 data[int(uav_name)] = [self.uav_msg["uav_link"][i].values()[0]["location"][0], self.uav_msg["uav_link"][i].values()[0]["location"][1], self.uav_msg["uav_link"][i].values()[0]["altitude"]]
-        print(data)
+        #print(data)
         return data
 
     def set_formation_id(self):
