@@ -433,7 +433,7 @@ def findRotationPath(deniedzones,start,finish,px):
     deltay=finish[1]-start[1]
     distance=dist(start,finish)
     rotationPath=[]
-    distance_px=distance/10
+    distance_px=distance/px
     x_px=deltax/distance_px
     y_px=deltay/distance_px
     start_t=start
@@ -533,24 +533,24 @@ def findRotationPath(deniedzones,start,finish,px):
                 angle=findTurnSide(pack[1],start_t,finish)
                 if aci<=-45 and aci>=-135:
                     if angle>0 and angle<180:
-                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]+10]]
+                        point_pack=[[start_t[0]+px,start_t[1]],[start_t[0],start_t[1]+px]]
                     if angle<360 and angle>180:
-                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]-10]]
+                        point_pack=[[start_t[0]+px,start_t[1]],[start_t[0],start_t[1]-px]]
                 if aci<=45 and aci>=-45:
                     if angle>0 and angle<180:
-                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]-10]]
+                        point_pack=[[start_t[0]+px,start_t[1]],[start_t[0],start_t[1]-px]]
                     if angle<360 and angle>180:
-                        point_pack=[[start_t[0]-10,start_t[1]],[start_t[0],start_t[1]-10]]
+                        point_pack=[[start_t[0]-px,start_t[1]],[start_t[0],start_t[1]-px]]
                 if aci>=45 and aci<=135:
                     if angle>0 and angle<180:
-                        point_pack=[[start_t[0]-10,start_t[1]],[start_t[0],start_t[1]-10]]
+                        point_pack=[[start_t[0]-px,start_t[1]],[start_t[0],start_t[1]-px]]
                     if angle<360 and angle>180:
-                        point_pack=[[start_t[0],start_t[1]+10],[start_t[0]-10,start_t[1]]]
+                        point_pack=[[start_t[0],start_t[1]+px],[start_t[0]-px,start_t[1]]]
                 if (aci>=135 and aci<=180) or (aci<=-135 and aci>=-180):
                     if angle>0 and angle<180:
-                        point_pack=[[start_t[0],start_t[1]+10],[start_t[0]-10,start_t[1]]]
+                        point_pack=[[start_t[0],start_t[1]+px],[start_t[0]-px,start_t[1]]]
                     if angle<360 and angle>180:
-                        point_pack=[[start_t[0]+10,start_t[1]],[start_t[0],start_t[1]+10]]
+                        point_pack=[[start_t[0]+px,start_t[1]],[start_t[0],start_t[1]+px]]
                 angle=findTurnSide(pack[1],start_t,finish)
                 a=0
                 for i in range(len(point_pack)):
@@ -570,7 +570,25 @@ def findRotationPath(deniedzones,start,finish,px):
                 whiledist=dist(start_t,finish)
                 rotationPath.append(start_t)
     return rotationPath
-
+def biggerdenied(denied_zones,px):
+    for i in range(len(denied_zones)):
+        point=np.array(denied_zones[i])
+        x = point[:,0]
+        y = point[:,1]
+        center = [sum(x) / len(point), sum(y) / len(point)]
+        for j in range(len(denied_zones[i])):
+            distance=dist([denied_zones[i][j][0],denied_zones[i][j][1]],[center[0],center[1]])
+            px_x=denied_zones[i][j][0]-center[0]
+            px_y=denied_zones[i][j][1]-center[1]
+            px_x=(px_x/distance)*px
+            px_y=(px_y/distance)*px
+            denied_zones[i][j][0]=denied_zones[i][j][0]+px_x
+            denied_zones[i][j][1]=denied_zones[i][j][1]+px_y
+    return denied_zones
+bigger_denied_zones=biggerdenied(data["denied_zones"],15)
+data["denied_zones"]=bigger_denied_zones
+            
+    
 
 
 
@@ -674,9 +692,11 @@ subareas=maxQ_Areas+subareas
 
 path_for_subareas={}
 temp=[]
+px=20
+path_keys=[]
 top_right=max(data["world_boundaries"])
-for path_point in range(0,data["world_length"],10):
-    for path_point1 in range (0,data["world_width"],10):
+for path_point in range(0,data["world_length"],px):
+    for path_point1 in range (0,data["world_width"],px):
         make_point=[top_right[0]-path_point,top_right[1]-path_point1]
         ekle=1
 
@@ -691,9 +711,11 @@ for path_point in range(0,data["world_length"],10):
             pack=point_control(subareas,make_point)
             hashh=hash(str(pack[1]))
             if str(str(hashh)) in path_for_subareas:
-
+                
                 temp=path_for_subareas[str(hashh)]
                 temp.append(make_point)
+                if hashh not in path_keys:
+                    path_keys.append(hashh)
                 path_for_subareas[str(hashh)]=temp
             else:
                 path_for_subareas[str(hashh)]=[make_point]
@@ -705,18 +727,19 @@ for path_point in range(0,data["world_length"],10):
 
 
 #tüm bölgelere yol cizildi
-for i in range(len(subareas)):
-    hashh=hash(str(subareas[i]))
-    new_path=findPath(hashh,path_for_subareas,10)
+
+for i in range(len(path_keys)):
+    hashh=path_keys[i]
+    new_path=findPath(hashh,path_for_subareas,px)
     path_for_subareas[str(hashh)]=new_path
 
 
 
 
 
-bitir=[232,467]
-ornek2=[-9,66]
-basla=[515,473]
+#bitir=[232,467]
+#ornek2=[-9,66]
+#basla=[515,473]
 
 #angle=findTurnSide(ornek2,ornek3,ornek1)
 #rotationpath=findRotationPath(data["denied_zones"],ornek2,basla,bitir,10)
@@ -788,9 +811,9 @@ fig.colorbar(k, ax=ax)
 
 
 
-for i in range(len(subareas)):
-    hashno=hash(str(subareas[i]))
-    plot_path=path_for_subareas[str(hashno)]
+for i in range(len(path_keys)):
+    hashno=str(path_keys[i])
+    plot_path=path_for_subareas[hashno]
     plot_path=np.array(plot_path)
     plt.plot(plot_path[:,0], plot_path[:,1], 'k-')
 
@@ -816,7 +839,7 @@ def findDRS(path_array):
             drs_array.append(make_point)
     return drs_array
         
-        
+"""       
 hashno=hash(str(subareas[2]))
 rot_pat=path_for_subareas[str(hashno)]
 test_rotation=findRotationPath(data["denied_zones"],[3300,-310],rot_pat[0],10)
@@ -835,7 +858,7 @@ for i in range(len(test_rotation)-2):
 
     if aci>10:
         plt.plot(test_rotation[i][0], test_rotation[i][1], 'g.')
-
+"""
 
     #if aci==t_aci:
         
