@@ -587,6 +587,20 @@ def biggerdenied(denied_zones,px):
     return denied_zones
 bigger_denied_zones=biggerdenied(data["denied_zones"],15)
 data["denied_zones"]=bigger_denied_zones
+def findDRS(path_array):
+    drs_array=[]
+    for i in range(len(path_array)-2):
+        
+        
+        t_aci=math.atan2(path_array[i][0]-path_array[i+1][0],path_array[i][1]-path_array[i+1][1])
+        t_aci=math.degrees(t_aci)
+        aci=math.atan2(path_array[i+1][0]-path_array[i+2][0],path_array[i+1][1]-path_array[i+2][1])
+        aci=math.degrees(aci)
+    
+        if aci != t_aci:
+            make_point=[path_array[i][0],path_array[i][1]]
+            drs_array.append(make_point)
+    return drs_array
             
     
 
@@ -820,24 +834,36 @@ for i in range(len(path_keys)):
 
 
 # ==================test===========================================================
+top=0
+for i in range(len(path_keys)):
+    hashno=str(path_keys[i])
+    path=path_for_subareas[hashno]
+    path=findDRS(path)
+    leng=len(path)
+    top=(top+leng)
+top=top/9
+
+
+
+tasks_hash=[]
+for i in range(data["uav_count"]):
+    tasks_hash.append([])
+i=0
+for i in range(len(path_keys)):
+    j=i%data["uav_count"]
+    print(j)
+    hashno=str(path_keys[i])
+    tasks_hash[j].append([hashno])
+    
+    
+
+    
+
 
 hashno=hash(str(subareas[2]))
 slow_path=path_for_subareas[str(hashno)]
 t_aci=None
-def findDRS(path_array):
-    drs_array=[]
-    for i in range(len(path_array)-2):
-        
-        
-        t_aci=math.atan2(path_array[i][0]-path_array[i+1][0],path_array[i][1]-path_array[i+1][1])
-        t_aci=math.degrees(t_aci)
-        aci=math.atan2(path_array[i+1][0]-path_array[i+2][0],path_array[i+1][1]-path_array[i+2][1])
-        aci=math.degrees(aci)
-    
-        if aci != t_aci:
-            make_point=[path_array[i][0],path_array[i][1]]
-            drs_array.append(make_point)
-    return drs_array
+
         
 """       
 hashno=hash(str(subareas[2]))
