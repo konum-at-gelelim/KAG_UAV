@@ -1,5 +1,3 @@
-import matplotlib.pyplot as plt
-import matplotlib.path as mpltPath
 import json
 import math
 
@@ -18,8 +16,15 @@ def telecom_second_distance_sort_aux_method(e):
 def telecom_cluster_sort_method(e):
     return e['cluster']
     
-def normal_pose(pose):
-    return [pose[0] - (world_width / 2.0), pose[1] - (world_length / 2.0)]
+def uav_injured_center_dist_sort_method(e):
+    return e['injured_center_dist']
+    
+def uav_id_sort_method(e):
+    return e['id']
+    
+#dummy
+def move_to_target(target, task):
+    print('moving to ' + str(target) + ' coordinate to serve' + ' with task of ' + str(task))
 
 def dist(position1, position2):
     sum = 0
@@ -27,23 +32,6 @@ def dist(position1, position2):
         diff = position1[i]-position2[i]
         sum += diff * diff
     return math.sqrt(sum)
-
-colors = [
-    'red',
-    'green',
-    'blue',
-    'magenta',
-    'yellow',
-    'cyan',
-    'black'
-]
-
-markers = [
-    '.',
-    '*',
-    '1',
-    'x',
-]
 
 casualties = [
     {'status': 'healthy', 'type': 'casualty', 'pose': (170.0, 80.0), 'in_world': True},
@@ -97,35 +85,36 @@ casualties = [
     {'status': 'injured', 'type': 'casualty', 'pose': (154.65, 198.291), 'in_world': True},
     {'status': 'injured', 'type': 'casualty', 'pose': (155.265, 196.569), 'in_world': True}
 ]
-
+uav_id = 7
 telecom_radius = 250.0
 telecom_diameter = telecom_radius * 2.0
 world_width = 1000.0
 world_length = 1000.0
-the_n = 3
-YOK = 'yok'
-TELEKOM = 'tel'
-
-#plt.plot(-500, -500, marker='.', color='white')
-#plt.plot(-500, 500, marker='.', color='white')
-#plt.plot(500, -500, marker='.', color='white')
-#plt.plot(500, 500, marker='.', color='white')
-
-center = [0.0, 0.0]
+the_n = 1
+DEFAULT = 'D'
+YOK = 'YOK'
+TELEKOM = 'T'
+KURTARMA = 'K'
+telecom_center = [0.0, 0.0]
+injured_center = [0.0, 0.0]
 cluster_count = 0
 telecom_cluster_centers = []
-healthy_count = 0
-for i in range(len(casualties)):
-    if casualties[i]['status'] == 'healthy':
-        healthy_count += 1
-        center[0] += casualties[i]['pose'][0]
-        center[1] += casualties[i]['pose'][1]
-
-center = [center[0] / float(healthy_count), center[1] / float(healthy_count)]
 telecom_nodes = []
+injured_nodes = []
 for i in range(len(casualties)):
     if casualties[i]['status'] == 'healthy':
-        telecom_nodes.append({'pose': tuple(casualties[i]['pose']), 'distance': dist(center, casualties[i]['pose']), 'cluster': -1, 'asigned_id': None})
+        telecom_center[0] += casualties[i]['pose'][0]
+        telecom_center[1] += casualties[i]['pose'][1]
+        telecom_nodes.append({'pose': tuple(casualties[i]['pose']), 'distance': None, 'cluster': -1})
+    else:
+        injured_center[0] += casualties[i]['pose'][0]
+        injured_center[1] += casualties[i]['pose'][1]
+        injured_nodes.append({'pose': tuple(casualties[i]['pose']), 'assigned_uav_id': None})    
+
+telecom_center = [telecom_center[0] / len(telecom_nodes), telecom_center[1] / len(telecom_nodes)]
+injured_center = [injured_center[0] / len(injured_nodes), injured_center[1] / len(injured_nodes)]
+for i in range(len(telecom_nodes)):
+    telecom_nodes[i]['distance'] = dist(telecom_center, telecom_nodes[i]['pose'])
 telecom_nodes.sort(reverse=True, key=telecom_distance_sort_aux_method)
 
 for i in range(len(telecom_nodes)):
@@ -152,49 +141,65 @@ for i in range(len(telecom_nodes)):
 
 telecom_nodes.sort(key=telecom_cluster_sort_method)
 
-#for i in telecom_nodes:
-#    print i
-    
-#for i in telecom_cluster_centers:
-#    print i
-    
-
-for i in telecom_nodes:
-    plt.plot(i['pose'][0], i['pose'][1], marker=markers[i['cluster'] // 7], color=colors[i['cluster'] % 7])
-
-plt.show()
-
-
-uav_position_list = []
+uav_list = []
 for uav_link_count in range(len(uav_msg['uav_link'])):
     for prefix_id in uav_msg['uav_link'][uav_link_count]:
-        uav_position_list.append([
-            int(prefix_id[4:]),
-            float(uav_msg['uav_link'][uav_link_count][prefix_id]['location'][0]),
-            float(uav_msg['uav_link'][uav_link_count][prefix_id]['location'][1]),
-            float(uav_msg['uav_link'][uav_link_count][prefix_id]['altitude']),
-            YOK
-        ])
+        uav_list.append({
+            'id': int(prefix_id[4:]),
+            'props': uav_msg['uav_link'][uav_link_count][prefix_id],
+            'assign': YOK,
+            'injured_center_dist': None
+        })
+
+
 
 for i in range(len(telecom_cluster_centers)):
-    nearest = {'id': -1, 'dist': None}
-    for j in range(len(uav_position_list)):
-        if uav_position_list[j][4] != YOK:
+    nearest = {'index': None, 'dist': None}  
+    for j in range(len(uav_list)):
+        if uav_list[j]['assign'] != YOK:
             continue
-        #print(uav_position_list[j][1:4])
-        d = dist(telecom_cluster_centers[i], uav_position_list[j][1:])
-        if d < nearest['dist'] or nearest['dist'] == None:
+        d = dist(telecom_cluster_centers[i], uav_list[j]['props']['location'])
+        if (d < nearest['dist'] or nearest['dist'] == None) and (uav_list[j]['props']['task'] == TELEKOM):
             nearest['dist'] = d
-            nearest['id'] = j
-    uav_position_list[nearest['id']][4] = TELEKOM + '_' + str(i)
-    
-for i in uav_position_list:
-    print i
+            nearest['index'] = j
+    if nearest['index'] != None:
+        uav_list[nearest['index']]['assign'] = TELEKOM + '_' + str(i)
 
 
 
 
+if uav_list[uav_id]['assign'][0] == TELEKOM:
+    print(int(uav_list[uav_id]['assign'][2:]))
+    move_to_target(telecom_cluster_centers[int(uav_list[uav_id]['assign'][2:])], uav_list[uav_id]['props']['task'])
+    print('BITTI BURADA METHOD, RETURN YAZIN BU PRINT YERINE!')
+####KURTARMA
+for i in range(len(uav_list)):
+    if uav_list[i]['assign'] == YOK:
+        uav_list[i]['injured_center_dist'] = dist(injured_center, uav_list[i]['props']['location'])
+uav_list.sort(reverse=True, key=uav_injured_center_dist_sort_method)
 
+for i in range(len(uav_list)):
+    if uav_list[i]['injured_center_dist'] == None:
+        break
+    nearest = {'index': None, 'dist': None}
+    for j in range(len(injured_nodes)):
+        if injured_nodes[j]['assigned_uav_id'] != None:
+            continue
+        d = dist(uav_list[i]['props']['location'], injured_nodes[j]['pose'])
+        if (d < nearest['dist'] or nearest['dist'] == None):
+            nearest['dist'] = d
+            nearest['index'] = j
+    if nearest['index'] != None:
+        injured_nodes[nearest['index']]['assigned_uav_id'] = uav_list[i]['id']
+        uav_list[i]['assign'] = KURTARMA + '_' + str(nearest['index'])
+        uav_list[i]['props']['task'] = KURTARMA
+uav_list.sort(key=uav_id_sort_method)
+if uav_list[uav_id]['assign'][0] == KURTARMA:
+    move_to_target(injured_nodes[int(uav_list[uav_id]['assign'][2:])], uav_list[uav_id]['props']['task'])
+    print('BITTI BURADA METHOD, RETURN YAZIN BU PRINT YERINE!')
+#####IDLE PARKOUR
 
+for i in uav_list:
+    print i['assign']
 
     
