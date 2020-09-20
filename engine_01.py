@@ -90,7 +90,7 @@ telecom_radius = 250.0
 telecom_diameter = telecom_radius * 2.0
 world_width = 1000.0
 world_length = 1000.0
-the_n = 1
+the_n = 3
 DEFAULT = 'D'
 YOK = 'YOK'
 TELEKOM = 'T'
@@ -200,6 +200,6 @@ if uav_list[uav_id]['assign'][0] == KURTARMA:
 #####IDLE PARKOUR
 
 for i in uav_list:
-    print i['assign']
+    print(i['id'], i['assign'])
 
     
