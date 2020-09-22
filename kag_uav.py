@@ -237,9 +237,20 @@ class KagUAV(BaseUAV):
                     if len(neighbour_list) >= the_n:
                         cluster_count += 1
                         neighbour_list.sort(key=self.telecom_second_distance_sort_aux_method)
-                        for j in (neighbour_list[:the_n]):
-                            telecom_nodes[j['tni']]['cluster'] = cluster_count-1   
-                        telecom_cluster_centers.append(telecom_nodes[i]['pose'])
+                        cluster_center_temp = [0.0, 0.0]
+                        
+                        
+                        for node in (neighbour_list[:self.the_n]):
+                            telecom_nodes[node['tni']]['cluster'] = cluster_count-1
+                            cluster_center_temp[0] += telecom_nodes[node['tni']]['pose'][0]
+                            cluster_center_temp[1] += telecom_nodes[node['tni']]['pose'][1]
+                        cluster_center_temp[0] /= self.the_n
+                        cluster_center_temp[1] /= self.the_n
+                        telecom_cluster_centers.append(cluster_center_temp)
+                        for j in range(len(neighbour_list[:self.the_n])):
+                            d = dist(telecom_cluster_centers[cluster_count-1], telecom_nodes[neighbour_list[j]['tni']]['pose'])
+                            if d >= telecom_radius:
+                                telecom_nodes[neighbour_list[j][tni]]['cluster'] = -1              
                 
                 telecom_nodes.sort(key=self.telecom_cluster_sort_method)
                 self.printAll(telecom_cluster_centers, 'cluster centeros')
