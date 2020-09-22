@@ -23,8 +23,9 @@ class KagUAV(BaseUAV):
         self.locdifftemp = 1942.27
         self.egilmeFlag = 0
         self.yukselmeFlag = 0
-        self.carpismaCemberi = 30
+        self.collisionDistance = 40
         self.defter = []# uav_link gps bozuklugu durumunda regresyon ile konum guncelleyecek aksi durumda ayni veriler devam edecek
+        self.defterCount = 20
         #
         self.iteration_count = 0
         self.home = None
@@ -46,7 +47,7 @@ class KagUAV(BaseUAV):
         self.pick_formation_id = True
         self.formation = {'arrow': [], 'prism': []}
         self.speed = [0.0, 0.0]
-        self.operation_phase = 0
+        self.operation_phase = -1
         self.loop_time = None
         self.loop_location = [0.0, 0.0]
         self.direction = [0.0, 0.0]
@@ -77,6 +78,7 @@ class KagUAV(BaseUAV):
         self.alt_lock = None
         self.cruise_control = False
         self.preheading = 380 # -360 ve +360 disinda bir deger koyuldu
+        self.IHALanded = False
 
     def act(self):
         #self.path_planning(self.params)
@@ -90,16 +92,46 @@ class KagUAV(BaseUAV):
         self.force_vector_calc() # carpismadan kacinma icin kuvvet hesabi
         self.col_avo() # kuvvetin iha dinamigine aktarimi
         self.brake_calc() # max speed hesabi
-        print("self.operation_phase =", self.operation_phase)
-        #self.poz = 2400, 300, 100
+        #self.target_speed = 160000
+        print(self.uav_msg['uav_guide']['gps_noise_flag'])
+        #print(self.uav_msg['sim_time'])
+        #print("self.operation_phase =", self.operation_phase)
+        #self.video_func()
+        #self.poz = 4400, 300, 100
         #self.move_to_target(self.poz)
+        #self.operation_phase = 3
+        self.safe_start()
         self.pre_formation()
         self.formation_func() # formasyon motoru
         self.amifallback() # geri donus karar verme araci
         self.move_to_home() # eve donus komutu
 
+    def safe_start(self):
+        if self.operation_phase == -1:
+            #target = [self.pose[0], self.pose[1], self.params['logical_camera_height_max'] + 5]
+            target = [self.pose[0], self.pose[1], 100 + 4]
+            self.move_to_target(target)
+            if self.pose[2] > 100:
+                self.operation_phase = self.operation_phase + 4
+
+    def video_func(self):
+        if self.uav_msg['sim_time'] <= 140000:
+            if self.uav_id >= 5:
+                self.poz = 4400, 300, 100
+                self.move_to_target(self.poz)
+            else:
+                self.poz = 2400, 300, 100
+                self.move_to_target(self.poz)
+        elif self.uav_msg['sim_time'] >= 140000:
+            if self.uav_id >= 5:
+                self.poz = 2400, 300, 100
+                self.move_to_target(self.poz)
+            else:
+                self.poz = 4400, 300, 100
+                self.move_to_target(self.poz)
+
     def acc_calc(self, Speed_diff):
-        print("timediff for speed =", self.timediff)
+        #print("timediff for speed =", self.timediff)
         #print("speed diff", Speed_diff[0], Speed_diff[1])
         if(Speed_diff[0] <= 5 and Speed_diff[0] >= -5):
             #print("xDiff = ", Speed_diff[0], "*", self.timediff, " = ", 0.00115148 * Speed_diff[0] * self.timediff)
@@ -140,43 +172,42 @@ class KagUAV(BaseUAV):
         if(self.uav_msg['uav_guide']['gps_noise_flag'] == True):
             Speed_diff = [self.target_speed[0] - self.current_speed[0], self.target_speed[1] - self.current_speed[1]]
             xAddition, yAddition = self.acc_calc(Speed_diff)
-            print("tahmini acc =", float(xAddition), float(yAddition))
+            #print("tahmini acc =", float(xAddition), float(yAddition))
             self.current_speed = [self.current_speed[0] + xAddition, self.current_speed[1] + yAddition]
-            print("tahmini x and y speed = ", int(self.current_speed[0]), int(self.current_speed[1]))
+            #print("tahmini x and y speed = ", int(self.current_speed[0]), int(self.current_speed[1]))
         else:
             self.current_speed = [self.uav_msg['active_uav']['x_speed'], self.uav_msg['active_uav']['y_speed']]
-        print("real x and y speed = ", self.uav_msg['active_uav']['x_speed'], self.uav_msg['active_uav']['y_speed'])
+        #print("real x and y speed = ", self.uav_msg['active_uav']['x_speed'], self.uav_msg['active_uav']['y_speed'])
 
     def ljp(self, r, epsilon, sigma):
-        if(r <= self.uav_msg['uav_formation']['u_b'] - 2):
+        if(r <= self.collisionDistance - 3):
             return 824604576
         else:
-            return 48 * epsilon * np.power(sigma, 12) / np.power(r - (self.uav_msg['uav_formation']['u_b'] - 2), 13) \
-            - 24 * epsilon * np.power(sigma, 6) / np.power(r - (self.uav_msg['uav_formation']['u_b'] - 2), 7)
+            return 48 * epsilon * np.power(sigma, 12) / np.power(r - (self.collisionDistance - 3), 13) \
+            - 24 * epsilon * np.power(sigma, 6) / np.power(r - (self.collisionDistance - 3), 7)
 
     def col_avo(self):
-        colTempAngle = (self.uav_msg["active_uav"]['heading'] - self.collisionAngle - 90) % 360
+        if self.operation_phase != -1:
+            colTempAngle = (self.uav_msg["active_uav"]['heading'] - self.collisionAngle - 90) % 360
+            #print("colTempAngle = ", colTempAngle)
+            self.yspeedaddition = -math.cos(math.radians(colTempAngle))*self.collisionMagnitude
+            self.xspeedaddition = math.sin(math.radians(colTempAngle))*self.collisionMagnitude
+            print("col avo speed = ", int(self.xspeedaddition), int(self.yspeedaddition))
+        else:
+            self.xspeedaddition = 0
+            self.yspeedaddition = 0
+
+    def potential_hole(self):
+        holeTempAngle = (self.uav_msg["active_uav"]['heading'] - self.holeAngle - 90) % 360
         #print("colTempAngle = ", colTempAngle)
-        self.yspeedaddition = -math.cos(math.radians(colTempAngle))*self.collisionMagnitude
-        self.xspeedaddition = math.sin(math.radians(colTempAngle))*self.collisionMagnitude
-        print("col avo speed = ", int(self.xspeedaddition), int(self.yspeedaddition))
+        self.yHoleAddition = -math.cos(math.radians(holeTempAngle))*self.holeMagnitude
+        self.xHoleAddition = math.sin(math.radians(holeTempAngle))*self.holeMagnitude
+        print("hole speed = ", int(self.xHoleAddition), int(self.yHoleAddition))
 
-    def altitude_controller(self):
-        tempAngle = self.collisionAngle
-        #print("heading and colheading =", self.uav_msg["active_uav"]['heading'], self.collisionAngle)
-        #iha cok hizliyken kontrollu gerceklesmeli
-        if(tempAngle <= (self.uav_msg["active_uav"]['heading']+2)%360 and tempAngle >= (self.uav_msg["active_uav"]['heading']-2)%360):
-            #print("deadlock_error")
-            if((self.uav_msg["active_uav"]['heading'])%360 > 0 and (self.uav_msg["active_uav"]['heading'])%360 < 180):
-                #print("iha egiliyor")
-                self.egilmeFlag = self.egilmeFlag + 1
-            elif((self.uav_msg["active_uav"]['heading'])%360 > 180 and (self.uav_msg["active_uav"]['heading'])%360 < 360):
-                #print("iha yukseliyor")
-                self.yukselmeFlag = self.egilmeFlag + 1
-
+    '''
     def brake_calc(self):
         brake_temp = 0
-        brake_var = 0
+        brake_var = 0, 0
         for i in range(len(self.uav_msg['uav_link'])):
             uav_name = self.uav_msg["uav_link"][i].keys()
             uav_name = uav_name[0][4:]
@@ -193,24 +224,31 @@ class KagUAV(BaseUAV):
                 tempy = tempy - self.y
                 #x ve y degerin magnitude'u
                 magnOfSpeed = math.sqrt((tempx)**2+(tempy)**2)
+                print("magnOfSpeed", int(magnOfSpeed))
                 #aralarindaki mesafe
                 distance = math.sqrt((self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])**2 + (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])**2)
-                gg = 3.121 * np.power(distance, 0.5342) + 4.214
-                #danger_calc = distance - (magnOfSpeed * 5.6)
-                danger_calc = gg - magnOfSpeed
-                if(danger_calc > brake_temp):
+                #gg = 3.121 * np.power(distance, 0.5342) + 4.214
+                temp = 0.32041 * magnOfSpeed - 1.35021
+                temp = np.power(temp, 1.872)
+                danger_calc = distance - (temp)
+                #danger_calc = gg - magnOfSpeed
+                if(danger_calc < brake_temp):
                     #distancex, distancey = (self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])/distance, (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])/distance
                     brake_temp = danger_calc
-                    brake_var = gg
+                    brake_var = distance, magnOfSpeed
                     #print("warning for =", i, "th IHA distance and speed = ", distance, magnOfSpeed)
-        #distance, magnOfSpeed = brake_var
+        distance, magnOfSpeed = brake_var
+        brake_temp = abs(brake_temp)
+        #brake_temp = 3.121 * np.power(brake_temp, 0.5342) + 4.214
+        self.maxSpeed = 3.121 * np.power(brake_temp, 0.5342) + 4.214
+        self.maxSpeed = 90 - self.maxSpeed
         print("brake_temp", brake_temp)
         print("brake_var", brake_var)
         if(brake_var > 90):
             brake_var = 90
         if len(self.uav_msg['uav_link']) == 1:
             brake_var = 90
-        self.maxSpeed = brake_var
+        #self.maxSpeed = brake_var
         if self.preheading != 380:
             headingdiff = self.preheading - self.pose[3]
             self.headingacc = headingdiff / self.timediff
@@ -223,25 +261,99 @@ class KagUAV(BaseUAV):
         #self.brakeMagnitude = magnOfSpeed - self.maxSpeed
         #self.brakeAngle = math.degrees(math.atan2(distancex, -distancey))
         #print("total brake(angle, magnitude) =", self.brakeAngle, self.brakeMagnitude)
+        '''
+
+    def brake_calc(self):
+        if (self.uav_msg['uav_guide']['gps_noise_flag'] == False):
+            brake_temp = 0
+            self.brakeID = -1
+            for i in range(len(self.uav_msg['uav_link'])):
+                uav_name = self.uav_msg["uav_link"][i].keys()
+                uav_name = uav_name[0][4:]
+                if int(uav_name) != self.uav_id:
+                    tempx = math.sin(math.radians(self.uav_msg["uav_link"][i].values()[0]["heading"])) * self.uav_msg["uav_link"][i].values()[0]["speed"]['x']
+                    tempx = tempx + math.sin((math.radians((self.uav_msg["uav_link"][i].values()[0]["heading"] - 90.0) % 360.0))) * self.uav_msg["uav_link"][i].values()[0]["speed"]['y']
+                    tempy = -math.cos(math.radians(self.uav_msg["uav_link"][i].values()[0]["heading"])) * self.uav_msg["uav_link"][i].values()[0]["speed"]['x']
+                    tempy = tempy - math.cos((math.radians((self.uav_msg["uav_link"][i].values()[0]["heading"] - 90.0) % 360.0))) * self.uav_msg["uav_link"][i].values()[0]["speed"]['y']
+                    #print("tempx - self.x =", tempx, self.x)
+                    #print("xspeed  =", self.uav_msg["uav_link"][i].values()[0]["speed"]['x'], self.uav_msg['active_uav']['x_speed'])
+                    tempx = tempx - self.x
+                    tempy = tempy - self.y
+                    #x ve y degerin magnitude'u
+                    magnOfSpeed = math.sqrt((tempx)**2+(tempy)**2)
+                    #print("magnOfSpeed", int(magnOfSpeed))
+                    distance = math.sqrt((self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])**2 + (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])**2)
+                    temp = 0.32041 * magnOfSpeed - 1.35021
+                    temp = np.power(temp, 1.872)
+                    danger_calc = distance - (temp)
+
+                    target_angle = math.atan2(self.uav_msg["uav_link"][i].values()[0]["location"][0]-self.pose[0], -(self.uav_msg["uav_link"][i].values()[0]["location"][1]-self.pose[1]))
+                    target_angle = math.degrees(target_angle)
+                    a = target_angle - self.pose[3]
+                    a = (a + 180) % 360 - 180
+                    print("brake id angle =", a)
+                    if a > -90 and a < 90 :
+                        if(danger_calc < brake_temp):
+                            brake_temp = danger_calc
+                            self.brakeID = int(uav_name)
+                            print("brakeID and danger_calc =", self.brakeID, danger_calc)
+            self.maxSpeed = 90
+            print("brake_temp", brake_temp)
+            if self.preheading != 380:
+                headingdiff = self.preheading - self.pose[3]
+                self.headingacc = headingdiff / self.timediff
+                #print("heading ivme =", self.headingacc)
+            self.preheading = self.pose[3]
+        print("max speed =", self.maxSpeed)
+        #print("real speed =", self.uav_msg['active_uav']['x_speed'], self.uav_msg['active_uav']['y_speed'])
 
     def force_vector_calc(self):
+        if self.operation_phase != -1:
+            ux = 0
+            uy = 0
+            for i in range(len(self.defter)):
+                #uav_name = self.uav_msg["uav_link"][i].keys()
+                #uav_name = uav_name[0][4:]
+                if self.temp > self.defterCount + 1:
+                    self.temp = self.defterCount + 1
+                #print(len(self.defter))
+                if self.defter[i][2][self.temp + -1] != -1 and self.collisionDistance - 5 >= abs(self.defter[i][2][self.temp + -1] - self.pose[2]):
+                    distance = math.sqrt((self.defter[i][0][self.temp + -1] - self.pose[0])**2 + (self.defter[i][1][self.temp + -1] - self.pose[1])**2)
+                    distancex, distancey = (self.defter[i][0][self.temp + -1] - self.pose[0])/distance, (self.defter[i][1][self.temp + -1] - self.pose[1])/distance
+                    u = self.ljp(distance, self.LJP_EPSILON, self.LJP_SIGMA)
+                    print("col avo id, distance and force=", int(i), distance, int(u))
+                    ux = ux + u*distancex
+                    uy = uy + u*distancey
+            self.collisionAngle = math.atan2(ux, -uy)
+            self.collisionAngle = math.degrees(self.collisionAngle)
+            self.collisionMagnitude = math.hypot(ux,uy)
+
+    def hole_potential(self, distance):
+        return distance * 0.500 * -1
+
+    def hole_vector_calc(self, target):
         ux = 0
         uy = 0
-        for i in range(len(self.uav_msg['uav_link'])):
-            uav_name = self.uav_msg["uav_link"][i].keys()
-            uav_name = uav_name[0][4:]
-            if int(uav_name) != self.uav_id and self.uav_msg['uav_formation']['u_b'] - 10 >= abs(self.uav_msg["uav_link"][i].values()[0]["altitude"] - self.pose[2]):
-                distance = math.sqrt((self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])**2 + (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])**2)
-                distancex, distancey = (self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])/distance, (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])/distance
-                u = self.ljp(distance, self.LJP_EPSILON, self.LJP_SIGMA)
-                print("col avo id, distance and force=", int(uav_name), distance, u)
-                ux = ux + u*distancex
-                uy = uy + u*distancey
-        self.collisionAngle = math.atan2(ux, -uy)
-        self.collisionAngle = math.degrees(self.collisionAngle)
-        self.collisionMagnitude = math.hypot(ux,uy)
-        #print("avoidance force = " , ux , uy)
-        #print("total vector(angle, magnitude) = ", self.collisionAngle, self.collisionMagnitude)
+        #for i in range(len(self.defter)):
+        #uav_name = self.uav_msg["uav_link"][i].keys()
+        #uav_name = uav_name[0][4:]
+        #if self.temp > self.defterCount + 1:
+            #self.temp = self.defterCount + 1
+        #print(len(self.defter))
+        #if self.defter[i][2][self.temp + -1] != -1 and self.uav_msg['uav_formation']['u_b'] - 5 >= abs(self.defter[i][2][self.temp + -1] - self.pose[2]):
+        distance = math.sqrt((target[0] - self.pose[0])**2 + (target[1] - self.pose[1])**2)
+        if distance != 0:
+            distancex, distancey = (target[0] - self.pose[0])/distance, (target[1] - self.pose[1])/distance
+        else:
+            distancex, distancey = 0, 0
+        u = self.hole_potential(distance)
+        #u = self.ljp(distance, self.LJP_EPSILON, self.LJP_SIGMA)
+        print("hole distance and force=", distance, int(u))
+        ux = ux + u*distancex
+        uy = uy + u*distancey
+        self.holeAngle = math.atan2(ux, -uy)
+        self.holeAngle = math.degrees(self.holeAngle)
+        self.holeMagnitude = math.hypot(ux,uy)
 
     def time_calc(self):
         if(self.temp >= 1):
@@ -262,8 +374,8 @@ class KagUAV(BaseUAV):
             self.instantydiff = self.averagey * self.timediff / self.locdifftemp
             #self.headingdiff = self.uav_msg["active_uav"]['heading'] - self.oldheading
             self.realgps = [self.realgps[0] + self.instantxdiff, self.realgps[1] + self.instantydiff]
-            print("tahmini gps = ",self.realgps[0], self.realgps[1])
-            print("real gps = ", self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1])
+            print("tahmini gps = ",self.pose[0], self.pose[1])
+            #print("real gps = ", self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1])
             #print("average x and y = ", self.averagex, self.averagey)
             #print("timediff = ", self.timediff)
             #print("tahmini yer degisirme = ", self.instantxdiff, self.instantydiff)
@@ -279,16 +391,89 @@ class KagUAV(BaseUAV):
 
     def starting_func(self):
         if self.home == None:#eve donus degiskeni
-            self.home = (self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1], 100.0)#eve donmek icin baslangic konumlari
+            self.home = [self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1], 100.0, 'D']#eve donmek icin baslangic konumlari
+            self.homeCenter = self.homeCenterCalc()
+            self.LandingAltitude = self.uav_msg['active_uav']['altitude']
             self.start_loc = [self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
             self.pre_location = [self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1]]
             self.uav_id = int(self.uav_id)
             self.pre_sim_time = self.uav_msg['sim_time']
             self.heading = self.uav_msg['active_uav']['heading'] % 360.0
+            self.tallBuildHeight = 0
+            if self.collisionDistance > self.uav_msg['uav_formation']['u_b']:
+                self.collisionDistance = self.uav_msg['uav_formation']['u_b']
+            for t in range(len(self.params["special_assets"])):
+                if self.params["special_assets"][t]["type"]=="tall_building":
+                    temp_tall_height=self.params["special_assets"][t]["height"]
+                    if (self.tallBuildHeight < temp_tall_height):
+                        self.tallBuildHeight = temp_tall_height
+                else:
+                    self.tallBuildHeight = self.params["telecom_height_max"]
+
+    def homeCenterCalc(self):
+        homeCenter = [0, 0]
+        for i in range(len(self.uav_msg['uav_link'])):
+            homeCenter = [self.uav_msg["uav_link"][i].values()[0]["location"][0] + homeCenter[0], self.uav_msg["uav_link"][i].values()[0]["location"][1] + homeCenter[1]]
+        return [homeCenter[0]/self.params['uav_count'], homeCenter[1]/self.params['uav_count']]
+
+    def taskFinder(self, task):
+        for i in range(len(self.uav_msg['uav_link'])):
+            uav_name = self.uav_msg["uav_link"][i].keys()
+            uav_name = uav_name[0][4:]
+            if self.uav_msg["uav_link"][i].values()[0]["task"] == task:
+                return int(uav_name)
+        return -1
 
     def move_to_home(self):
-        if self.operation_phase == 3:# 0-> kalkis 1->formasyon sureci 2->gorevler 3->eve donus
-            self.move_to_target(self.home)
+        if self.operation_phase == 3:
+            #print("slm1")
+            self.home[2] = self.tallBuildHeight
+            self.home[3] = 'D'
+            if util.dist(self.homeCenter, [self.pose[0], self.pose[1]]) <= self.params["uav_communication_range"]*0.8:
+                print("slm2")
+                if self.taskFinder('T') == self.uav_id:
+                    print("Task bulundu o benim inmeye devam ediom")
+                    self.home[2] = self.params['logical_camera_height_max']
+                    self.home[3] = 'T'
+                    if self.reached(util.dist([self.home[0], self.home[1]], [self.pose[0], self.pose[1]])):
+                        if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 0.5:
+                            #print("land", self.LandingAltitude)
+                            self.home[2] = self.LandingAltitude
+                            print("landed")
+                            self.home[3] = 'K'
+                            self.IHALanded = True
+                elif self.taskFinder('T') == -1:
+                    #print("slm4")
+                    print("T taski bulunamadi atama yabiliyor")
+                    mindist = self.params["uav_communication_range"] * 0.8
+                    for i in range(len(self.uav_msg['uav_link'])):
+                        uav_name = self.uav_msg["uav_link"][i].keys()
+                        uav_name = uav_name[0][4:]
+                        distance = util.dist([self.uav_msg["uav_link"][i].values()[0]["location"][0], self.uav_msg["uav_link"][i].values()[0]["location"][1]], self.homeCenter)
+                        if distance < mindist:
+                            #print("slm5")
+                            mindist = distance
+                            minDistID = uav_name
+                    if int(minDistID) == self.uav_id:
+                        #print("slm6")
+                        self.home[2] = self.tallBuildHeight - (self.collisionDistance + 5)
+                        self.home[3] = 'T'
+                else:
+                    print("T taski bulundu ve o baskasi, bekle")
+                    self.home[2] = self.tallBuildHeight
+                    self.home[3] = 'D'
+            self.move_to_target_with_task(self.home, self.home[3])
+
+    def formation_setup(self):
+        self.get_formation_data()
+        if self.formation_type == 'arrow':
+            self.formation['arrow'] = self.arrow_gen(self.guide_location, self.a_b, self.a_k, self.u_b, self.u_k, self.uav_count)
+        else:
+            self.formation['prism'] = self.prism_gen(self.guide_location, self.a_k, self.u_b, self.u_k, self.uav_count)
+        if not self.uav_msg['uav_guide']['gps_noise_flag']:
+            self.set_formation_id()
+        self.target_position = self.formation[self.formation_type][self.formation_id]
+        #print(self.formation[self.formation_type])
 
     def formation_func(self):
         if self.operation_phase == 1:
@@ -296,6 +481,7 @@ class KagUAV(BaseUAV):
                 self.formation_setup()
                 self.gps_alt = self.pose[2]
                 print("formation target =", self.target_position[0], self.target_position[1])
+                print("formation dist =", self.dist([self.target_position[0], self.target_position[1]], [self.pose[0], self.pose[1]]))
                 self.move_to_target(self.target_position)
             else:
                 self.operation_phase = self.operation_phase + 2 # formasyon bittiyse sonraki adima gecis
@@ -304,127 +490,108 @@ class KagUAV(BaseUAV):
         if self.operation_phase == 0:
             if self.uav_msg['uav_guide']['dispatch']:
                 self.formation_setup()
+                print("formation target =", self.target_position[0], self.target_position[1])
+                print("formation dist =", self.dist([self.target_position[0], self.target_position[1]], [self.pose[0], self.pose[1]]))
                 self.move_to_target(self.target_position)
             else:
                 self.operation_phase += 1
 
     def bum_func(self):
         if self.operation_phase == 2:
-            if self.injury_operation_phase:
-                A = [198.297, 77.702, float(self.params['injured_pick_up_height'])]
-                B = [125.0, -440.0, float(self.params['injured_release_height'])]
-                self.injury_operation(A, B)
-                print(self.injury_operation_phase, self.injury_load_phase)
+            x = 5
+            #furkanin kodlari buraya yapistirilacak.
 
-    def injury_operation(self, injured_xy, hospital_xy):
-        if self.interrupt_loc == None:
-            self.interrupt_loc = [self.pose[0], self.pose[1], self.pose[2]]
-        if self.injury_operation_phase == 1:
-            self.injury_load_process(injured_xy, 'load')
-        elif self.injury_operation_phase == 2:
-            self.injury_load_process(hospital_xy, 'unload')
-        else:
-            self.injury_operation_phase = 0
-            print('hoooraaaaa! We saved mother russia!')
-            pass
-
-    def injury_load_process(self, target, load_type):
-        if self.injury_load_phase == 0:
-            d = util.dist(self.pose[:2], target[:2])
-            if not self.reached(d):
-                self.move_to_target((target[:2] + [90.0]))
-            else:
-                self.injury_load_phase += 1
-        elif self.injury_load_phase == 1:
-            print(self.alt_lock == self.pose[2], self.alt_lock, self.pose[2])
-            if self.pose[2] < (target[2] - 2.0):
-                print('a')
-                if self.alt_lock == None:
-                    print('b')
-                    self.alt_lock = float((target[2] - 2.0))
-                elif self.is_load_done(load_type):
-                    print('d')
-                    self.injury_load_phase += 1
-                print('z')
-                self.target_speed = [0.0,0.0]
-                self.send_move_cmd(0.0, 0.0, self.pose[3], self.alt_lock)
-            else:
-                print('x')
-                self.target_speed = [0.0,0.0]
-                self.send_move_cmd(0.0, 0.0, self.pose[3], 2.5)
-        elif self.injury_load_phase == 2:
-            if self.pose[2] < 90.0:
-                self.target_speed = [0.0,0.0]
-                self.send_move_cmd(0, 0, self.pose[3], 100.0)
-            else:
-                self.target_speed = [0.0,0.0]
-                self.send_move_cmd(0, 0, self.pose[3], self.pose[2])
-                self.injury_load_phase = 0
-                self.injury_operation_phase += 1
-
-
-    def is_load_done(self, load_type):
-    	if self.injury_timer == None:
-    		self.injury_timer = self.uav_msg['sim_time']
-        if load_type == 'load':
-            if self.uav_msg['sim_time'] - self.injury_timer > (self.load_time * 1000):
-                self.injury_timer = None
-                return True
-            else:
-            	print((self.uav_msg['sim_time'] - self.injury_timer), self.alt_lock, self.pose[2], self.alt_lock == self.pose[2])
-                return False
-        else:
-            if self.uav_msg['sim_time'] - self.injury_timer > (self.load_time * 1000):
-                self.injury_timer = None
-                return True
-            else:
-            	print((self.uav_msg['sim_time'] - self.injury_timer), self.alt_lock, self.pose[2], self.alt_lock == self.pose[2])
-                return False
-
-    def formation_setup(self):
-        self.get_formation_data()
-        if self.formation_type == 'arrow':
-            self.formation['arrow'] = self.arrow_gen(self.guide_location, self.a_b, self.a_k, self.u_b, self.u_k, self.uav_count)
-        else:
-            self.formation['prism'] = self.prism_gen(self.guide_location, self.a_k, self.u_b, self.u_k, self.uav_count)
-        if self.pick_formation_id:
-            self.set_formation_id()
-            self.pick_formation_id = False
-        self.target_position = self.formation[self.formation_type][self.formation_id]
-        #print(self.formation[self.formation_type])
-
-    def formation_move(self, target_position):
-        dist = util.dist(target_position, self.pose)
-        target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
-        target_angle = math.degrees(target_angle) % 360.0
-
-        x_speed = self.uav_msg['uav_guide']['speed']['x']
-        if self.brake_timer < self.brake_limit:
-            self.brake_timer += 1
-            target_angle = self.pose[3]
-            x_speed = 0
-        else:
-            if not self.reached(dist):
-                x_speed += dist * 0.125
-        if target_position[2] < 1.0:
-            target_position[2] = 1.0
-        self.target_speed = [x_speed * 1.00133, 0.0]
-        self.send_move_cmd(x_speed, 0.0, target_angle, target_position[2])
-
-    def move_to_target(self, target_position):
-        dist = util.dist(target_position, self.pose)
+    def move_to_target_with_task(self, target_position, task):
+        dist = util.dist([target_position[0],target_position[1]], [self.pose[0],self.pose[1]])
         target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
         target_angle = math.degrees(target_angle)
-
         x_speed, y_speed=self.getXY(target_position[0], target_position[1], self.maxSpeed)
+        a = target_angle - self.pose[3]
+        a = (a + 180) % 360 - 180
+        if dist < 360.0 and a > -80 and a < 80:
+            target_angle = self.pose[3]
+        print("angle_diff =", a)
         x_speed = self.xspeedaddition + x_speed
         y_speed = self.yspeedaddition + y_speed
-        '''
-        if target_position[2] < 1.0:
-            target_position[2] = 1.0
-        if dist > 30.0:
-        	x_speed = 20.0
-        '''
+
+        if self.IHALanded:
+            x_speed = 0
+            y_speed = 0
+            target_angle = 90
+            target_position[2] = self.LandingAltitude
+            task = 'T'
+        self.target_speed = [x_speed *  1.00133, y_speed *  1.00133]
+        print("target dist =", dist)
+        print("xspeed, yspeed =", x_speed, y_speed)
+        self.send_move_cmd(x_speed, y_speed, target_angle, target_position[2], task)
+
+    def move_to_target(self, target_position):
+        if self.formation_type == 'prism' and (self.operation_phase == 1 or self.operation_phase == 0):
+            if target_position[2] > (self.pose[2]+2):
+                target_position[2] = target_position[2] + 30
+            elif target_position[2] < (self.pose[2]-2):
+                target_position[2] = target_position[2] - 30
+        if self.operation_phase == 0:
+            self.xHoleAddition = 0
+            self.yHoleAddition = 0
+        else:
+            if self.uav_msg['uav_guide']['gps_noise_flag'] == False:
+                self.hole_vector_calc(target_position)
+                self.potential_hole()
+        dist = util.dist(target_position, self.pose)
+        target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
+        target_angle = math.degrees(target_angle) % 360
+        x_speed, y_speed = self.getXY(target_position[0], target_position[1], self.maxSpeed)
+        if self.operation_phase == 0:
+            a = target_angle - self.uav_msg['uav_guide']['heading']
+            a = (a + 180) % 360 - 180
+            print("angle_diff =", a)
+            target_angle = target_angle - self.uav_msg['uav_guide']['heading']
+            target_angle = ((target_angle + 180) % 360 - 180) / 2
+            target_angle = (self.uav_msg['uav_guide']['heading'] - target_angle) % 360
+            if not self.reached(dist):
+                x_speed = self.xspeedaddition + x_speed
+                y_speed = self.yspeedaddition + y_speed
+            if not a > -70 and a < 70:
+                target_angle = self.pose[3]
+        elif self.operation_phase == 1:
+            if self.reached(dist):
+                if 'x' in self.uav_msg['uav_guide']['speed']:
+                    x_speed = self.uav_msg['uav_guide']['speed']['x']
+                if 'y' in self.uav_msg['uav_guide']['speed']:
+                    y_speed = self.uav_msg['uav_guide']['speed']['y']
+                    target_angle = self.uav_msg['uav_guide']['heading']
+            a = target_angle - self.uav_msg['uav_guide']['heading']
+            a = (a + 180) % 360 - 180
+            print("angle_diff =", a)
+            if not a > -70 and a < 70: #70
+                target_angle = self.pose[3]
+            if dist <= 130 and dist >= 30:
+                self.formation_situation = True
+            else:
+                self.formation_situation = False
+            if self.formation_situation:
+                x_speed = self.xspeedaddition + x_speed + self.xHoleAddition
+                y_speed = self.yspeedaddition + y_speed + self.yHoleAddition
+            else:
+                x_speed = self.xspeedaddition + x_speed
+                y_speed = self.yspeedaddition + y_speed
+            print("formation speed =", self.uav_msg['uav_guide']['speed']['x'], self.uav_msg['uav_guide']['speed']['y'])
+        else:
+            if dist < 200.0:
+                target_angle = self.pose[3]
+            a = target_angle - self.pose[3]
+            a = (a + 180) % 360 - 180
+            print("angle_diff =", a)
+            if not a > -80 and a < 80: # 80
+                target_angle = self.pose[3]
+            x_speed = self.xspeedaddition + x_speed + self.xHoleAddition
+            y_speed = self.yspeedaddition + y_speed + self.yHoleAddition
+        if target_position[2] < 5:
+            target_position[2] = 5
+        print("target dist =", dist)
+        print("basilan xspeed, yspeed =", x_speed, y_speed)
+        print("anlik hiz =", self.uav_msg['active_uav']['x_speed'], self.uav_msg['active_uav']['y_speed'])
         self.target_speed = [x_speed *  1.00133, y_speed *  1.00133]
         self.send_move_cmd(x_speed, y_speed, target_angle, target_position[2])
 
@@ -455,75 +622,49 @@ class KagUAV(BaseUAV):
         self.u_b = self.uav_msg['uav_formation']['u_b']
         self.u_k = self.uav_msg['uav_formation']['u_k']
 
-    '''
-    def noise_filter(self,data):
-        loc_y=data["active_uav"]["location"][1]
-        loc_x=data["active_uav"]["location"][0]
-        if len(self.defterx)<=12:
-            self.defterx.append(loc_x)
-            self.deftery.append(loc_y)
-        if len(self.defterx)==12:
-            self.defterx.pop(0)
-            self.deftery.pop(0)
-        if data["uav_guide"]["gps_noise_flag"] == True:
-
-            inds = arange(0,11)
-            slope, intercept, r_value, p_value, std_err = stats.linregress(inds,self.defterx)
-            linex = slope*inds+intercept
-            tahminX=linex[5]
-            slope, intercept, r_value, p_value, std_err = stats.linregress(inds,self.deftery)
-            liney = slope*inds+intercept
-            tahminY=liney[5]
-            print("tahmin",tahminX,tahminY)
-            print("reel",loc_x,loc_y)
-            return [tahminX,tahminY]
-    '''
     def updateUAVLink(self):
         data = self.prepareUAVLink()
+        #print("bum",data)
         if len(self.defter) == 0:
             #print(len(data))
             for i in range(len(data)):
-                list = []
-                self.defter.append(list)
+                self.defter.append([])
         #print("bum", self.defter)
         if len(self.defter[0]) == 0:
             for i in range(self.params['uav_count']):
                 #veriyi kullan
-                list = ['x']
-                self.defter[i].append(list)
-                list = ['y']
-                self.defter[i].append(list)
-        print("bum", self.defter)
-        #loc_x=data[i][0]
-        #loc_y=data[i][1]
-        #self.defter[iha_id][x or y][paket sirasi]
-        #print(self.defter[i])
+                self.defter[i].append([])
+                self.defter[i].append([])
+                self.defter[i].append([])
         for i in range(self.params['uav_count']):
-            if len(self.defter[i][0])<=12:
+            if len(self.defter[i][0])<=self.defterCount + 2:
                 #print("defter", self.defter)
                 #print("i",i)
                 self.defter[i][0].append(data[i][0])
                 self.defter[i][1].append(data[i][1])
-            if len(self.defter[i][0]) == 12:
+                self.defter[i][2].append(data[i][2])
+            if len(self.defter[i][0]) == self.defterCount + 2:
                 #print("defter", self.defter)
                 #print("i",i)
                 self.defter[i][0].pop(0)
                 self.defter[i][1].pop(0)
-                self.temp = self.temp + 1
+                self.defter[i][2].pop(0)
             #print(self.defter)
-            if self.uav_msg['uav_guide']['gps_noise_flag'] == True:
-                inds = arange(0,11) # bu nedir bilmorm
+            if self.uav_msg['uav_guide']['gps_noise_flag']:
+            #if self.uav_msg['uav_guide']['gps_noise_flag'] == True :
+                inds = arange(0,self.defterCount + 1) # bu nedir bilmorm
                 #print(self.defter[i][0])
                 slope, intercept, r_value, p_value, std_err = stats.linregress(inds, self.defter[i][0])
                 linex = slope*inds+intercept
+                self.defter[i][0][self.defterCount]=linex[self.defterCount]
                 tahminX=linex[5]
                 slope, intercept, r_value, p_value, std_err = stats.linregress(inds, self.defter[i][1])
                 liney = slope*inds+intercept
+                self.defter[i][1][self.defterCount]=liney[self.defterCount]
                 tahminY=liney[5]
-                print(i, "numarali ihanin tahmini konumu = ", tahminX, tahminY)
-                self.defter[i][0][9] = tahminX
-                self.defter[i][1][9] = tahminY
-                #print("reel", loc_x, loc_y)
+        if len(self.defter[i][0])==self.defterCount + 1:
+            print("tahmini konum =",self.defter[0][0][self.defterCount],self.defter[0][1][self.defterCount])
+            #print("gercek konum =", data[0][0], data[0][1])
 
     def prepareUAVLink(self):
         data = []
@@ -546,15 +687,34 @@ class KagUAV(BaseUAV):
     def set_formation_id(self):
         uav_position_list = []
         nearest = {'id': -1, 'dist': 0}
-        prefix = 'uav_'
-        for id in range(len(self.uav_msg['uav_link'])):
-            #print id, self.uav_msg['uav_link'][id][prefix + str(id)]['location']
-            uav_position_list.append([
-                id,
-                float(self.uav_msg['uav_link'][id][prefix + str(id)]['location'][0]),
-                float(self.uav_msg['uav_link'][id][prefix + str(id)]['location'][1]),
-                float(self.uav_msg['uav_link'][id][prefix + str(id)]['altitude'])
-            ])
+        if not self.uav_msg['uav_guide']['gps_noise_flag']:
+            for uav_link_count in range(len(self.uav_msg['uav_link'])):
+                for prefix_id in self.uav_msg['uav_link'][uav_link_count]:
+                    uav_position_list.append([
+                        int(prefix_id[4:]),
+                        float(self.uav_msg['uav_link'][uav_link_count][prefix_id]['location'][0]),
+                        float(self.uav_msg['uav_link'][uav_link_count][prefix_id]['location'][1]),
+                        float(self.uav_msg['uav_link'][uav_link_count][prefix_id]['altitude'])
+                    ])
+        else:
+            for i in range(len(self.defter)):
+                if (self.uav_id) == i:
+                    uav_position_list.append([
+                        i,
+                        float(self.pose[0]),
+                        float(self.pose[1]),
+                        float(0)
+                    ])
+                else:
+                    if float(self.defter[i][2][self.defterCount]) == -1:
+                        continue
+                    uav_position_list.append([
+                        i,
+                        float(self.defter[i][0][self.defterCount]),
+                        float(self.defter[i][1][self.defterCount]),
+                        float(0)
+                    ])
+            self.defter[i]
         cx = -1
         for node in self.formation[self.formation_type]:
             cx += 1
@@ -575,7 +735,8 @@ class KagUAV(BaseUAV):
             #print nearest['id'], self.uav_id, nearest['dist'], cx, self.formation_id
             if nearest['id'] == self.uav_id:
                 self.formation_id = cx
-            uav_position_list.pop(pop_id)
+            if pop_id != None:
+                uav_position_list.pop(pop_id)
 
     def rotateUndTranslate(self, formation_array, angle, pivot):
         for i in range(len(formation_array)):
@@ -619,6 +780,8 @@ class KagUAV(BaseUAV):
         return self.rotateUndTranslate(arrow_formation, a_k, pivot)
 
     def prism_gen(self, guide_location, a_k, u_b, u_k, uav_count):
+        if self.uav_msg['uav_guide']['gps_noise_flag']:
+            u_b = u_b * 1.2
         prism_formation = []
         pivot = [guide_location[0], guide_location[1]]
         a_k = (a_k - 90.0) % 360.0
@@ -648,6 +811,7 @@ class KagUAV(BaseUAV):
         return self.rotateUndTranslate(prism_formation, a_k, pivot)
 
     def PID(self, Kp, Ki, Kd, origin_time=None):
+        print("p, i, d =", Kp, Ki, Kd)
         if self.pid_flag:
             return 0
         if origin_time is None:
@@ -682,9 +846,9 @@ class KagUAV(BaseUAV):
         self.Cd=self.Cd*100
         self.previous_time = current_time#ms
         self.previous_error = error
-        #print("turev",self.Kd * self.Cd)
-        #print("int",self.Ki * self.Ci)
-        #print("p :",self.Kp * self.Cp)
+        print("turev",self.Kd * self.Cd)
+        print("int",self.Ki * self.Ci)
+        print("p :",self.Kp * self.Cp)
         return (
             (self.Kp * self.Cp)    # proportional term
             + (self.Ki * self.Ci)  # integral term
@@ -726,18 +890,32 @@ class KagUAV(BaseUAV):
         xx=math.cos(head)
         dist = util.dist(target_position, self.pose)
         #print(dist)
-        self.PID(0.5,0.0,35.0)
-        hm=self.Update(dist)
+        if self.brakeID != -1:
+            print("brakeID=", self.brakeID)
+            for i in range(len(self.uav_msg['uav_link'])):
+                uav_name = self.uav_msg["uav_link"][i].keys()
+                uav_name = uav_name[0][4:]
+                if int(uav_name) == self.brakeID:
+                    dist = util.dist([self.uav_msg["uav_link"][i].values()[0]["location"][0], self.uav_msg["uav_link"][i].values()[0]["location"][1]], self.pose)
+            print("pid dist = ", dist)
+            self.PID(0.5, 0.0 , 60.0)
+            hm=self.Update(dist)
+            print("danger pid")
+        else:
+            print("pid dist = ", dist)
+            self.PID(0.5, 0.0, 35.0)
+            hm=self.Update(dist)
+            print("not danger pid")
         #print(hm)
         if hm>speed:
             hm=speed
         xx=xx*hm
         yy=yy*hm
         #print("istenen:",xx,yy)
-        return xx,yy
+        return xx, yy
 
     def findAngle(self,x,y):
-        fark=[0,0]
+        fark=[0, 0]
         uav_x=self.pose[0]
         uav_y=self.pose[1]
         fark[0]=x-uav_x
@@ -746,9 +924,9 @@ class KagUAV(BaseUAV):
         aci=math.atan2(fark[0],fark[1])
         angle=math.degrees(aci)
         return angle
+
     def point_control(self,zones,point):
         i=0
-
         tik=0
         for i in range (len(zones)):
             bolge=mpltPath.Path(zones[i])
@@ -757,37 +935,29 @@ class KagUAV(BaseUAV):
                 tik=1
                 pack=[inside,zones[i]]
                 return pack
-
             if tik==0:
                 pack=[inside,0]
-
         return pack
 
     def slice_control(self,dilim,bas,sinir,ustsinir,zones,data,px):
         pack=[]
         start=1
-
         for i in range(int(bas),sinir,-px):
             make_point=[dilim,i]
             inside=self.point_control(zones,make_point)
-
             if (start==1) and (inside[0][0]==False):
                 upper=make_point
                 start=0
-
             if start==0:
-
                 if (inside[0][0]==True) or (i-px<=sinir):
                     if inside[0][0]==True:
                         ustsinir=inside[1]
                     lower=make_point
                     if inside[0][0]==True:
                         pack=[upper,lower,inside[1],ustsinir]
-
                         return pack
                     if inside[0][0]==False:
                         pack=[upper,lower,0,ustsinir]
-
                         return pack
         return pack
 
@@ -803,7 +973,6 @@ class KagUAV(BaseUAV):
             make_point=[dilim,top]
             top=top-px
             pack=self.point_control([zone],make_point)
-
             if pack[0][0]==True:
                 start=[make_point,zone,zone_stop]
                 break
@@ -831,9 +1000,7 @@ class KagUAV(BaseUAV):
         denied_start=0
         while True:
             paket=self.slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
-
             if start==1:
-
                 altsinir=paket[2]
                 ustsinir=paket[3]
                 upper.append(paket[0])
@@ -841,21 +1008,15 @@ class KagUAV(BaseUAV):
                 start=0
                 dilim=dilim+px
             if start==0 and altsinir==paket[2] and ustsinir==paket[3]:
-
                 upper.append(paket[0])
                 lower.append(paket[1])
                 dilim=dilim+px
-
-
             if start==0:
-
                 if (altsinir!=paket[2]) or (ustsinir!=paket[3]):
                     if (altsinir!=paket[2]) and (ustsinir!=0):
                         denied_start=dilim
                     temp=[]
                     temp=lower[::-1]
-
-
                     cell=temp+upper
                     cells.append(cell)
                     cell=[]
@@ -863,22 +1024,15 @@ class KagUAV(BaseUAV):
                     upper=[]
                     altsinir=paket[2]
                     ustsinir=paket[3]
-
-
                 if paket[2]!=0:
-
                     new_start=self.unpack(paket[2],denied_start,data,px)
                     if new_start[0] not in stack_point:
                         stack_area.append(new_start[1])
                         stack_point.append(new_start[0])
                         stack_stop.append(new_start[2])
-
-
                 if dilim>solsinir and len(stack_point)!=0:
                     temp=[]
                     temp=lower[::-1]
-
-
                     cell=temp+upper
                     cells.append(cell)
                     cell=[]
@@ -886,22 +1040,17 @@ class KagUAV(BaseUAV):
                     upper=[]
                     altsinir=paket[2]
                     ustsinir=paket[3]
-
                     pop=stack_point.pop()
                     stack_area.pop()
                     zone_stop=stack_stop.pop()
                     dilim=pop[0]
                     bas=pop[1]
                     solsinir=int(zone_stop)
-
-
                 if dilim>solsinir and len(stack_point)==0:
                     temp=[]
                     temp=lower[::-1]
-
                     cell=temp+upper
                     cells.append(cell)
-
                     break
         return cells
 
@@ -929,8 +1078,6 @@ class KagUAV(BaseUAV):
             diff = position1[i]-position2[i]
             sum += diff * diff
         return math.sqrt(sum)
-
-
 
     def makeClusters(self, data):
         for building in data['special_assets']:
@@ -1026,14 +1173,12 @@ class KagUAV(BaseUAV):
                 new_path.append([make_point[0],make_point[1]+px])
                 make_point=[make_point[0],make_point[1]+px]
                 continue
-
             elif [make_point[0]+px,make_point[1]] in points:
                 back=0
                 points.remove([make_point[0]+px,make_point[1]])
                 new_path.append([make_point[0]+px,make_point[1]])
                 make_point=[make_point[0]+px,make_point[1]]
                 continue
-
             elif [make_point[0],make_point[1]-px] in points:
                 back=0
                 points.remove([make_point[0],make_point[1]-px])
@@ -1046,17 +1191,15 @@ class KagUAV(BaseUAV):
                 new_path.append([make_point[0]-px,make_point[1]])
                 make_point=[make_point[0]-px,make_point[1]]
                 continue
-
             else:
                 try:
-
                     back=back+1
                     make_point=new_path[-(2*back)]
                     new_path.append([make_point[0],make_point[1]])
                 except:
                     break
-
         return new_path
+
     def sortSubareas(self,subareas,maxQ):
         sub_dist={}
         point=maxQ[0]
@@ -1071,7 +1214,6 @@ class KagUAV(BaseUAV):
             y = point[:,1]
             temp_center = [sum(x) / len(point), sum(y) / len(point)]
             center=[(center[0]+temp_center[0])/2,(center[1]+temp_center[1])/2]
-
         i=0
         for i in range(len(subareas)):
             hashno=str(hash(str(subareas[i])))
