@@ -240,7 +240,6 @@ class KagUAV(BaseUAV):
                 if self.paused=="birak" and self.paused_rotation_path==None:
                     print("rota hesaplandi")
                     self.paused_rotation_path=self.findRotationPath(self.bigger_denied_zones,[self.pose[0],self.pose[1]],self.min_h_loc,self.px)
-
                 if self.paused_rotation_path!=None:
                     self.paused_drs_points=self.findDRS(self.paused_rotation_path)
                 if len(self.inj_list)!=0:
@@ -248,7 +247,6 @@ class KagUAV(BaseUAV):
                     print("yarali icin kalan mesafe ",self.dist([self.pose[0],self.pose[1]],self.inj_list[0][0]))
 
                 if self.paused_rotation_path!=None:
-
                     print("hedef path ",self.dist([self.pose[0],self.pose[1]],self.paused_rotation_path[0]))
                     print("drs mesafesi ",self.dist([self.pose[0],self.pose[1]],self.paused_drs_points[0]))
                     print(self.paused)
@@ -256,37 +254,47 @@ class KagUAV(BaseUAV):
 
 
                 #yarali alma
-                if len(self.inj_list)!=0 :
-                    if self.dist([self.pose[0],self.pose[1]],self.inj_list[0][0])<5 :
+                if len(self.inj_list)!=0:
+                    print("#yaraliya inme")
+                    if self.dist([self.pose[0],self.pose[1]],self.inj_list[0][0])<=5 and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False:
                         self.paused="bekle"
                         self.altitude_control=self.params["injured_pick_up_height"]-5
 
+
+                '''
                 if self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True and self.paused=="yakala":
                     self.altitude_control=self.rotationAltitudeMax
                     self.paused="bekle"
+                '''
 
+                print("#yaraliyi kaldirma")
                 if self.paused=="bekle" and self.paused_rotation_path[0]!=self.min_h_loc and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True:
                     self.send_move_cmd(0,0,self.uav_msg["active_uav"]["heading"],self.rotationAltitudeMax)
-                    if self.uav_msg["active_uav"]["altitude"]>self.rotationAltitudeMin:
-
+                    if self.uav_msg["active_uav"]["altitude"]>=self.rotationAltitudeMin:
+                        self.altitude_control=self.rotationAltitudeMax
                         self.paused="birak"
                         self.paused_rotation_path=None
 
-
-
-
-
-                #yarali birakma
-                if self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True:
+                print("#yarali birakma")
+                if self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True and self.paused=="birak":
+                    self.altitude_control=self.rotationAltitudeMax
                     if self.dist([self.pose[0],self.pose[1]],self.min_h_loc)<5:
                         self.paused="bekle"
                         self.altitude_control=self.params["injured_release_height"]-5
 
-                if self.paused=="bekle" and self.paused_rotation_path[0]==self.min_h_loc and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False:
-                    self.altitude_control=self.params["injured_release_height"]-5
-                    self.paused=None
-                    self.paused_rotation_path=None
+                print("#yarali biraktiktan sonra")
 
+                if self.paused=="bekle" and self.paused_rotation_path[0]==self.min_h_loc and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False:
+                    self.altitude_control=self.rotationAltitudeMax
+                    if self.uav_msg["active_uav"]["altitude"]>self.rotationAltitudeMin:
+                        if len(self.inj_list)!=0:
+                            self.paused="yakala"
+                        else:
+                            self.paused=None
+                            self.status=None
+                        self.paused_rotation_path=None
+
+                print("#hic bisi kalmadi.")
                 if len(self.inj_list)==0 and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False and self.paused==None:
                     self.altitude_control=self.rotationAltitudeMax
                     if self.uav_msg["active_uav"]["altitude"]>=self.rotationAltitudeMin:
@@ -366,6 +374,7 @@ class KagUAV(BaseUAV):
     def move_to_path(self, target_position):
         #self.drs_direct_points
         #self.rotation_array
+
         if self.status!="paused":
             dist = util.dist([self.drs_direct_points[0][0],self.drs_direct_points[0][1]], self.pose)
         if self.status=="paused":
@@ -384,6 +393,9 @@ class KagUAV(BaseUAV):
         '''
         print("col avo", self.xspeedaddition, self.xspeedaddition)
         self.target_speed = [x_speed *  1.00133, y_speed *  1.00133]
+        if self.paused=="bekle":
+            x_speed=0
+            y_speed=0
         self.send_move_cmd(x_speed, y_speed, target_angle, self.altitude_control)
     def getXY_forpath(self, x, y, speed):
         target_position=[x,y]
@@ -835,25 +847,33 @@ class KagUAV(BaseUAV):
                 if len(self.aliveUAVlist) <=self.params['uav_count']-2:
                     self.idontwannalive=1
                     print("Fress F to pay respect...")
-
                 i=0
                 tasks_hash=[]
-                for i in range(self.params['uav_count']):
+                for i in range(self.params["uav_count"]):
                     tasks_hash.append([])
-
-
+                a=0
                 i=0
-                for i in range(len(self.sorted_path_keys)):
-                    j=i%self.params['uav_count']
-                    hashno=str(self.sorted_path_keys[i])
+                while a!=len(self.sorted_path_keys):
+                    print(a)
+                    j=i%(self.params["uav_count"])
+                    i=i+1
+                    hashno=str(self.sorted_path_keys[a])
                     if j not in self.aliveUAVlist:
                         continue
+                    a=a+1
                     tasks_hash[j].append([hashno])
-
-                self.tasks_hash=tasks_hash
+                self.tasks_hash = tasks_hash
                 print(self.tasks_hash)
-
-            self.scanloop()
+                self.scantemp = 1
+                self.send_move_cmd(0, 0, self.pose[3], self.pose[2])
+            if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 5 or self.scantemp == 0:
+                self.scantemp = 0
+                try :
+                    self.scanloop()
+                except:
+                    self.operation_phase=self.operation_phase+1
+                if self.forcequit==1:
+                    self.operation_phase=self.operation_phase+1
 
     def move_to_target_with_task(self, target_position, task):
         dist = util.dist([target_position[0],target_position[1]], [self.pose[0],self.pose[1]])
