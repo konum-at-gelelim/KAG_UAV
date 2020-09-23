@@ -96,11 +96,8 @@ class KagUAV(BaseUAV):
         self.onemore=0
 
     def act(self):
-
         # umutun ve erenin codelari duzenlendi
         self.starting_func() # baslangic konum degerleri kayidi
-
-
         self.time_calc() # location_calc icin paket suresi guncellemesi
         self.speed_calc() # gps bozuklugu durumu speed hesabi
         self.location_calc() # gps bozuklugu durumu location hesabi
@@ -109,6 +106,8 @@ class KagUAV(BaseUAV):
         self.force_vector_calc() # carpismadan kacinma icin kuvvet hesabi
         self.col_avo() # kuvvetin iha dinamigine aktarimi
         self.brake_calc() # max speed hesabi
+        print(self.uav_msg['sim_time'])
+        print(self.pose)
         #self.target_speed = 160000
         #print(self.uav_msg['uav_guide']['gps_noise_flag'])
         #print(self.uav_msg['sim_time'])
@@ -127,15 +126,16 @@ class KagUAV(BaseUAV):
 
     def altitude_controller(self):
         self.rotationAltitudeMin = self.tallBuildHeight + 5
+        print("min", self.rotationAltitudeMin)
         self.rotationAltitudeMax = self.params["telecom_height_max"] - 1
         if self.rotationAltitudeMax < self.rotationAltitudeMin:
             self.rotationAltitudeMax = self.rotationAltitudeMin
-        self.scanAltitude = self.params["logical_camera_height_max"] - 1
+        self.scanAltitude = self.params["logical_camera_height_max"] - 5
 
     def scanloop(self):
         if self.forcequit==0:
-            print("scan loop")
-            print(self.status)
+            #print("scan loop")
+            #print(self.status)
             if len(self.uav_msg["hospitals_in_range"])!=0:
                 for i in range(len(self.uav_msg["hospitals_in_range"])):
                     if self.uav_msg["hospitals_in_range"][i]["quota"]==0:
@@ -159,7 +159,7 @@ class KagUAV(BaseUAV):
                     return
 
                 if self.scan_path==None:
-                    print("scan path olusturuldu")
+                    #print("scan path olusturuldu")
                     self.scan_id=self.sorted_tasks_hash[self.uav_id][0][0]#deneme
 
                     self.scan_path=self.path_for_subareas[self.scan_id]
@@ -169,6 +169,7 @@ class KagUAV(BaseUAV):
                 if self.dist(self.scan_path[0],[self.pose[0],self.pose[1]])<=self.px*2:
                     self.rotation_array=None
                     self.altitude_control=self.scanAltitude
+                    #print(self.scanAltitude)
                     self.instant_path=self.scan_path
                     self.drs_direct_points=self.findDRS(self.instant_path)
 
@@ -178,14 +179,15 @@ class KagUAV(BaseUAV):
 
                     self.rotation_array=self.findRotationPath(self.bigger_denied_zones,[self.pose[0],self.pose[1]],self.scan_path[0],self.px)
                     self.altitude_control=self.rotationAltitudeMax
+                    #print(self.rotationAltitudeMax)
                     self.instant_path=self.rotation_array
                     self.drs_direct_points=self.findDRS(self.instant_path)
 
                 if self.status!="paused":
                     self.move_to_path(self.instant_path[0])
-                print("scan icin kalan mesafe ",self.dist([self.pose[0],self.pose[1]],self.scan_path[0]))
-                print("hedef path ",self.dist([self.pose[0],self.pose[1]],self.instant_path[0]))
-                print("drs mesafesi ",self.dist([self.pose[0],self.pose[1]],self.drs_direct_points[0]))
+                #print("scan icin kalan mesafe ",self.dist([self.pose[0],self.pose[1]],self.scan_path[0]))
+                #print("hedef path ",self.dist([self.pose[0],self.pose[1]],self.instant_path[0]))
+                #print("drs mesafesi ",self.dist([self.pose[0],self.pose[1]],self.drs_direct_points[0]))
                 if self.instant_path!=None and self.drs_direct_points!=None:
 
                     if self.dist(self.drs_direct_points[0],[self.pose[0],self.pose[1]])<10:
@@ -212,7 +214,7 @@ class KagUAV(BaseUAV):
 
 
             if self.status=="paused":
-
+                print(self.paused)
                 #hastane bul
                 min_dist=9999999999
                 for j in range(len(self.params["special_assets"])):
@@ -225,7 +227,6 @@ class KagUAV(BaseUAV):
                                     min_h_loc=hos_loc
                             else:
                                 min_h_loc=hos_loc
-
                 self.min_h_loc=min_h_loc
 
 
@@ -242,62 +243,64 @@ class KagUAV(BaseUAV):
                     self.paused_rotation_path=self.findRotationPath(self.bigger_denied_zones,[self.pose[0],self.pose[1]],self.min_h_loc,self.px)
                 if self.paused_rotation_path!=None:
                     self.paused_drs_points=self.findDRS(self.paused_rotation_path)
-                if len(self.inj_list)!=0:
-                    print(self.inj_list)
-                    print("yarali icin kalan mesafe ",self.dist([self.pose[0],self.pose[1]],self.inj_list[0][0]))
 
-                if self.paused_rotation_path!=None:
-                    print("hedef path ",self.dist([self.pose[0],self.pose[1]],self.paused_rotation_path[0]))
-                    print("drs mesafesi ",self.dist([self.pose[0],self.pose[1]],self.paused_drs_points[0]))
-                    print(self.paused)
+
+                    if self.paused!="bekle":
+                        self.altitude_control=self.rotationAltitudeMax
                     self.move_to_path(self.paused_rotation_path[0])
 
 
                 #yarali alma
                 if len(self.inj_list)!=0:
-                    print("#yaraliya inme")
+
                     if self.dist([self.pose[0],self.pose[1]],self.inj_list[0][0])<=5 and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False:
+                        print("#yaraliya inme")
                         self.paused="bekle"
                         self.altitude_control=self.params["injured_pick_up_height"]-5
+                        #print(self.params["injured_pick_up_height"]-5)
 
 
-                '''
-                if self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True and self.paused=="yakala":
-                    self.altitude_control=self.rotationAltitudeMax
-                    self.paused="bekle"
-                '''
-
-                print("#yaraliyi kaldirma")
                 if self.paused=="bekle" and self.paused_rotation_path[0]!=self.min_h_loc and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True:
-                    self.send_move_cmd(0,0,self.uav_msg["active_uav"]["heading"],self.rotationAltitudeMax)
+                    print("#yaraliyi kaldirma")
+                    self.send_move_cmd(0,0,self.uav_msg["active_uav"]["heading"],self.rotationAltitudeMax + 20)
                     if self.uav_msg["active_uav"]["altitude"]>=self.rotationAltitudeMin:
                         self.altitude_control=self.rotationAltitudeMax
+                        #print(self.rotationAltitudeMax)
                         self.paused="birak"
                         self.paused_rotation_path=None
 
-                print("#yarali birakma")
+
                 if self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True and self.paused=="birak":
+                    print("#yarali birakma")
                     self.altitude_control=self.rotationAltitudeMax
+
+                    #print(self.rotationAltitudeMax)
                     if self.dist([self.pose[0],self.pose[1]],self.min_h_loc)<5:
                         self.paused="bekle"
                         self.altitude_control=self.params["injured_release_height"]-5
+                        #print(self.params["injured_release_height"]-5)
 
-                print("#yarali biraktiktan sonra")
+
 
                 if self.paused=="bekle" and self.paused_rotation_path[0]==self.min_h_loc and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False:
-                    self.altitude_control=self.rotationAltitudeMax
-                    if self.uav_msg["active_uav"]["altitude"]>self.rotationAltitudeMin:
+                    print("#yarali biraktiktan sonra")
+                    self.altitude_control=self.rotationAltitudeMax + 20
+                    #print(self.rotationAltitudeMax)
+                    if self.uav_msg["active_uav"]["altitude"] > self.rotationAltitudeMin:
+                        self.altitude_control = self.rotationAltitudeMax
                         if len(self.inj_list)!=0:
                             self.paused="yakala"
                         else:
-                            self.paused=None
                             self.status=None
                         self.paused_rotation_path=None
 
-                print("#hic bisi kalmadi.")
+
                 if len(self.inj_list)==0 and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False and self.paused==None:
-                    self.altitude_control=self.rotationAltitudeMax
+                    print("#hic bisi kalmadi.")
+                    self.altitude_control=self.rotationAltitudeMax + 20
+                    #print(self.rotationAltitudeMax)
                     if self.uav_msg["active_uav"]["altitude"]>=self.rotationAltitudeMin:
+                        self.altitude_control=self.rotationAltitudeMax
                         self.status=None
 
                 if self.paused!="bekle":
@@ -318,12 +321,8 @@ class KagUAV(BaseUAV):
                                 if self.paused_rotation_path[0]!=self.min_h_loc:
                                     self.paused_rotation_path.pop(0)
 
-
-
-
-
     def findainjured(self):
-
+        print(self.uav_msg["casualties_in_world"])
         inj=[]
 
         for i in range(len(self.uav_msg["casualties_in_world"])):
@@ -391,7 +390,7 @@ class KagUAV(BaseUAV):
         if dist > 30.0:
         	x_speed = 20.0
         '''
-        print("col avo", self.xspeedaddition, self.xspeedaddition)
+        #print("col avo", self.xspeedaddition, self.xspeedaddition)
         self.target_speed = [x_speed *  1.00133, y_speed *  1.00133]
         if self.paused=="bekle":
             x_speed=0
@@ -604,6 +603,7 @@ class KagUAV(BaseUAV):
                     distance = math.sqrt((self.uav_msg["uav_link"][i].values()[0]["location"][0] - self.pose[0])**2 + (self.uav_msg["uav_link"][i].values()[0]["location"][1] - self.pose[1])**2)
                     temp = 0.32041 * magnOfSpeed - 1.35021
                     temp = np.power(temp, 1.872)
+                    print("temp", temp)
                     danger_calc = distance - (temp)
 
                     target_angle = math.atan2(self.uav_msg["uav_link"][i].values()[0]["location"][0]-self.pose[0], -(self.uav_msg["uav_link"][i].values()[0]["location"][1]-self.pose[1]))
@@ -615,7 +615,7 @@ class KagUAV(BaseUAV):
                         if(danger_calc < brake_temp):
                             brake_temp = danger_calc
                             self.brakeID = int(uav_name)
-                            print("brakeID and danger_calc =", self.brakeID)
+                            #print("brakeID and danger_calc =", self.brakeID)
             self.maxSpeed = 90
             #print("brake_temp", brake_temp)
             if self.preheading != 380:
@@ -710,6 +710,7 @@ class KagUAV(BaseUAV):
 
     def starting_func(self):
         if self.home == None:#eve donus degiskeni
+            print(self.params)
             self.home = [self.uav_msg['active_uav']['location'][0], self.uav_msg['active_uav']['location'][1], 100.0, 'D']#eve donmek icin baslangic konumlari
             self.homeCenter = self.homeCenterCalc()
             self.LandingAltitude = self.uav_msg['active_uav']['altitude']
@@ -719,20 +720,23 @@ class KagUAV(BaseUAV):
             self.pre_sim_time = self.uav_msg['sim_time']
             self.heading = self.uav_msg['active_uav']['heading'] % 360.0
             self.tallBuildHeight = 0
-            self.altitude_controller()
-            print("path start")
+
             multithread=Thread(target=self.path_planning,args=(self.params,self.px))
             multithread.start()
+
             if self.collisionDistance > self.uav_msg['uav_formation']['u_b']:
                 self.collisionDistance = self.uav_msg['uav_formation']['u_b']
+
             for t in range(len(self.params["special_assets"])):
                 if self.params["special_assets"][t]["type"]=="tall_building":
                     temp_tall_height=self.params["special_assets"][t]["height"]
                     if (self.tallBuildHeight < temp_tall_height):
                         self.tallBuildHeight = temp_tall_height
-                else:
-                    self.tallBuildHeight = self.params["telecom_height_max"]
-            print("path finish")
+
+            if self.tallBuildHeight == 0:
+                self.tallBuildHeight = self.params["telecom_height_max"]
+
+            self.altitude_controller()
 
     def homeCenterCalc(self):
         homeCenter = [0, 0]
@@ -854,7 +858,7 @@ class KagUAV(BaseUAV):
                 a=0
                 i=0
                 while a!=len(self.sorted_path_keys):
-                    print(a)
+                    #print(a)
                     j=i%(self.params["uav_count"])
                     i=i+1
                     hashno=str(self.sorted_path_keys[a])
@@ -863,12 +867,12 @@ class KagUAV(BaseUAV):
                     a=a+1
                     tasks_hash[j].append([hashno])
                 self.tasks_hash = tasks_hash
-                print(self.tasks_hash)
+                #print(self.tasks_hash)
                 self.scantemp = 1
                 self.send_move_cmd(0, 0, self.pose[3], self.pose[2])
             if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 5 or self.scantemp == 0:
                 self.scantemp = 0
-                try :
+                try:
                     self.scanloop()
                 except:
                     self.operation_phase=self.operation_phase+1
@@ -1310,6 +1314,8 @@ class KagUAV(BaseUAV):
     def point_control(self,zones,point):
         i=0
         tik=0
+        if len(zones)==0:
+            pack=[False,0]
         for i in range (len(zones)):
             bolge=mpltPath.Path(zones[i])
             inside=bolge.contains_points([point])
@@ -1479,9 +1485,7 @@ class KagUAV(BaseUAV):
                 return False
         return True
 
-    def forAll(self,l):
-        for i in l:
-            print(i)
+
 
     def dist(self,position1, position2):
         diffx = position1[0]-position2[0]
@@ -1691,7 +1695,7 @@ class KagUAV(BaseUAV):
 
 
     def findRotationPath(self,deniedzones,start,finish,px):
-        self.altitude_control=self.rotationAltitudeMin
+        self.altitude_control=self.rotationAltitudeMax
         deltax=finish[0]-start[0]
         deltay=finish[1]-start[1]
         distance=self.dist(start,finish)
@@ -2043,7 +2047,9 @@ class KagUAV(BaseUAV):
             aci=math.sqrt(aci**2)
             if aci>10:
                 make_point=[path_array[i+1][0],path_array[i+1][1]]
+                make_point1=[path_array[i][0],path_array[i][1]]
                 drs_array.append(make_point)
+                drs_array.append(make_point1)
         drs_array.append(path_array[-1])
         return drs_array
 
