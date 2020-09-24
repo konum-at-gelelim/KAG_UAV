@@ -1334,31 +1334,24 @@ class KagUAV(BaseUAV):
     def slice_control(self,dilim,bas,sinir,ustsinir,zones,data,px):
         pack=[]
         start=1
-
         for i in range(int(bas),sinir,-px):
             make_point=[dilim,i]
             inside=self.point_control(zones,make_point)
-
             if (start==1) and (inside[0][0]==False):
                 upper=make_point
                 start=0
-
             if start==0:
-
                 if (inside[0][0]==True) or (i-px<=sinir):
                     if inside[0][0]==True:
                         ustsinir=inside[1]
                     lower=make_point
                     if inside[0][0]==True:
                         pack=[upper,lower,inside[1],ustsinir]
-
                         return pack
                     if inside[0][0]==False:
                         pack=[upper,lower,0,ustsinir]
-
                         return pack
         return pack
-
     def unpack(self, zone, dilim, data, px):
         top=data["world_boundaries"]
         top=max(top)
@@ -1377,19 +1370,20 @@ class KagUAV(BaseUAV):
                 break
         return start
 
-    def BCD(self,zones,area,data,px):
-        start=area[3]
+    def BCD(zones,area,data,px):
+        area=np.array(area)
+        sol=min(area[:,0])
+        top=max(area[:,1])
+        start=[sol,top]
         dilim=start[0]
         bas=start[1]
-        sinir=min(area)
-        sinir=sinir[1]
+        sinir=min(area[:,1])
         altsinir=[]
         upper=[]
         lower=[]
-        solsinir=max(area)
-        solsinir=solsinir[0]
-        ustsinir=max(area)
-        ustsinir=ustsinir[0]
+        #solsinir=sol
+        ustsinir=max(area[:,1])
+        sagsinir=max(area[:,0])
         cells=[]
         cell=[]
         stack_point=[]
@@ -1398,10 +1392,10 @@ class KagUAV(BaseUAV):
         start=1
         denied_start=0
         while True:
-            paket=self.slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
-
+            print(dilim,bas,sinir,ustsinir)
+            paket=slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
+            #print(paket[3],paket[2])
             if start==1:
-
                 altsinir=paket[2]
                 ustsinir=paket[3]
                 upper.append(paket[0])
@@ -1409,21 +1403,15 @@ class KagUAV(BaseUAV):
                 start=0
                 dilim=dilim+px
             if start==0 and altsinir==paket[2] and ustsinir==paket[3]:
-
                 upper.append(paket[0])
                 lower.append(paket[1])
                 dilim=dilim+px
-
-
             if start==0:
-
                 if (altsinir!=paket[2]) or (ustsinir!=paket[3]):
                     if (altsinir!=paket[2]) and (ustsinir!=0):
                         denied_start=dilim
                     temp=[]
                     temp=lower[::-1]
-
-
                     cell=temp+upper
                     cells.append(cell)
                     cell=[]
@@ -1431,22 +1419,15 @@ class KagUAV(BaseUAV):
                     upper=[]
                     altsinir=paket[2]
                     ustsinir=paket[3]
-
-
                 if paket[2]!=0:
-
-                    new_start=self.unpack(paket[2],denied_start,data,px)
+                    new_start=unpack(paket[2],denied_start,data,px)
                     if new_start[0] not in stack_point:
                         stack_area.append(new_start[1])
                         stack_point.append(new_start[0])
                         stack_stop.append(new_start[2])
-
-
-                if dilim>solsinir and len(stack_point)!=0:
+                if dilim>sagsinir and len(stack_point)!=0:
                     temp=[]
                     temp=lower[::-1]
-
-
                     cell=temp+upper
                     cells.append(cell)
                     cell=[]
@@ -1454,22 +1435,18 @@ class KagUAV(BaseUAV):
                     upper=[]
                     altsinir=paket[2]
                     ustsinir=paket[3]
-
                     pop=stack_point.pop()
                     stack_area.pop()
                     zone_stop=stack_stop.pop()
                     dilim=pop[0]
                     bas=pop[1]
-                    solsinir=int(zone_stop)
-
-
-                if dilim>solsinir and len(stack_point)==0:
+                    sagsinir=int(zone_stop)
+                if dilim>sagsinir and len(stack_point)==0:
                     temp=[]
                     temp=lower[::-1]
-
                     cell=temp+upper
                     cells.append(cell)
-
+                    print("slm")
                     break
         return cells
 
@@ -1896,7 +1873,7 @@ class KagUAV(BaseUAV):
         for i in self.special_assets:
             clusters[i["c"]].append(i["p"])
 
-        mask_for_cluster=self.unpacked_cluster(clusters,75)
+        mask_for_cluster=self.unpacked_cluster(clusters,150)
         merge_tall=[]
         temp_mask_for_cluster=[]
         for j in range(len(mask_for_cluster)):
