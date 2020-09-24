@@ -855,9 +855,7 @@ class KagUAV(BaseUAV):
 
                 self.before_scan = 1
                 self.aliveUAVlist=self.post_formation_survivor_id()
-                if len(self.aliveUAVlist) <=self.params['uav_count']-2:
-                    self.idontwannalive=1
-                    print("Fress F to pay respect...")
+
                 i=0
                 tasks_hash=[]
                 for i in range(self.params["uav_count"]):
@@ -2112,7 +2110,7 @@ class KagUAV(BaseUAV):
             aci=t_aci-aci
             aci=math.sqrt(aci**2)
             if aci>10:
-                make_point=[path_array[i][0],path_array[i][1]]
+                make_point=[path_array[i+1][0],path_array[i+1][1]]
                 drs_array.append(make_point)
         drs_array.append(path_array[-1])
         return drs_array
