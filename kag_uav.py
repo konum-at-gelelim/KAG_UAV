@@ -1334,9 +1334,10 @@ class KagUAV(BaseUAV):
     def slice_control(self,dilim,bas,sinir,ustsinir,zones,data,px):
         pack=[]
         start=1
+        #print(dilim,bas,sinir,ustsinir)
         for i in range(int(bas),sinir,-px):
             make_point=[dilim,i]
-            inside=self.point_control(zones,make_point)
+            inside=self,point_control(zones,make_point)
             if (start==1) and (inside[0][0]==False):
                 upper=make_point
                 start=0
@@ -1370,7 +1371,7 @@ class KagUAV(BaseUAV):
                 break
         return start
 
-    def BCD(zones,area,data,px):
+    def BCD(self,zones,area,data,px):
         area=np.array(area)
         sol=min(area[:,0])
         top=max(area[:,1])
@@ -1392,8 +1393,8 @@ class KagUAV(BaseUAV):
         start=1
         denied_start=0
         while True:
-            print(dilim,bas,sinir,ustsinir)
-            paket=slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
+            #print(dilim,bas,sinir,ustsinir)
+            paket=self.slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
             #print(paket[3],paket[2])
             if start==1:
                 altsinir=paket[2]
@@ -1420,7 +1421,7 @@ class KagUAV(BaseUAV):
                     altsinir=paket[2]
                     ustsinir=paket[3]
                 if paket[2]!=0:
-                    new_start=unpack(paket[2],denied_start,data,px)
+                    new_start=self.unpack(paket[2],denied_start,data,px)
                     if new_start[0] not in stack_point:
                         stack_area.append(new_start[1])
                         stack_point.append(new_start[0])
@@ -1446,7 +1447,7 @@ class KagUAV(BaseUAV):
                     temp=lower[::-1]
                     cell=temp+upper
                     cells.append(cell)
-                    print("slm")
+                    #print("slm")
                     break
         return cells
 
