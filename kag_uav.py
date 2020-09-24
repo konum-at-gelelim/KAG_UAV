@@ -1920,8 +1920,7 @@ class KagUAV(BaseUAV):
         tall_locs_=[]
         for t in range(len(data["special_assets"])):
             if data["special_assets"][t]["type"]=="tall_building":
-                #buyuklugu 10 arttirildi binalarin
-                tall_width=max(data["special_assets"][t]["width"])+10
+                tall_width=max(data["special_assets"][t]["width"])+15
                 tall_locs=data["special_assets"][t]["locations"]
                 for i in range(len(tall_locs)):
                     tmp=[tall_locs[i][0]-(tall_width/2),tall_locs[i][1]+(tall_width/2)]
