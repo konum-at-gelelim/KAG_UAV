@@ -690,8 +690,8 @@ class KagUAV(BaseUAV):
                 multithread=Thread(target=self.path_planning,args=(self.params,self.px))
                 multithread.start()
             except Exception as e:
+                self.bringworst=1
                 print(e)
-
 
             if self.bringworst==1:
                 try:
