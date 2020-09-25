@@ -112,7 +112,7 @@ class KagUAV(BaseUAV):
 
         #print(self.uav_msg['sim_time'])
         #print(self.pose)
-        print(self.uav_msg)
+        #print(self.uav_msg)
         #self.target_speed = 160000
         #print(self.uav_msg)
         #print(self.uav_msg['sim_time'])
@@ -124,10 +124,9 @@ class KagUAV(BaseUAV):
         self.safe_start()
         self.pre_formation()
         self.formation_func() # formasyon motoru
-        try:
-            self.scan_func()
-        except:
-            self.operation_phase=3
+
+        self.scan_func()
+
         self.amifallback() # geri donus karar verme araci
         self.move_to_home() # eve donus komutu
 
@@ -398,6 +397,24 @@ class KagUAV(BaseUAV):
         if self.paused=="bekle":
             x_speed=0
             y_speed=0
+        if self.paused=="birak" or self.paused=="yakala":
+            if self.uav_msg["active_uav"]["altitude"]<=self.rotationAltitudeMin:
+                self.altitude_control=self.rotationAltitudeMin+20
+                x_speed=0
+                y_speed=0
+
+
+        if abs(self.headingacc)>=0.031:
+            top_speed=math.sqrt(self.uav_msg["active_uav"]["x_speed"]**2+self.uav_msg["active_uav"]["y_speed"]**2)
+            if top_speed>=10:
+                simple_x=(self.uav_msg["active_uav"]["x_speed"]/top_speed)*10
+                simple_y=(self.uav_msg["active_uav"]["y_speed"]/top_speed)*10
+                slowdown_x=self.uav_msg["active_uav"]["x_speed"]-simple_x
+                slowdown_y=self.uav_msg["active_uav"]["y_speed"]-simple_y
+                x_speed=slowdown_x
+                y_speed=slowdown_y
+                print("slow downnnn ",x_speed,y_speed)
+        #print(self.uav_msg["active_uav"]["heading"])
         self.send_move_cmd(x_speed, y_speed, target_angle, self.altitude_control)
 
     def getXY_forpath(self, x, y, speed):
@@ -817,13 +834,15 @@ class KagUAV(BaseUAV):
                 self.send_move_cmd(0, 0, self.pose[3], self.pose[2])
             if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 5 or self.scantemp == 0:
                 self.scantemp = 0
+                self.scanloop()
+                """
                 try:
                     self.scanloop()
                 except:
                     self.operation_phase=self.operation_phase+1
                 if self.forcequit==1:
                     self.operation_phase=self.operation_phase+1
-
+                """
     def move_to_target_with_task(self, target_position, task):
         dist = util.dist([target_position[0],target_position[1]], [self.pose[0],self.pose[1]])
         target_angle = math.atan2(target_position[0]-self.pose[0], -(target_position[1]-self.pose[1]))
