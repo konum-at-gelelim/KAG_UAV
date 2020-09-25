@@ -94,6 +94,7 @@ class KagUAV(BaseUAV):
         self.forcequit=0
         self.px=self.cam_sensor_width()
         self.onemore=0
+        self.bringworst=0
 
     def act(self):
         # umutun ve erenin codelari duzenlendi
@@ -685,9 +686,19 @@ class KagUAV(BaseUAV):
             self.pre_sim_time = self.uav_msg['sim_time']
             self.heading = self.uav_msg['active_uav']['heading'] % 360.0
             self.tallBuildHeight = 0
+            try:
+                multithread=Thread(target=self.path_planning,args=(self.params,self.px))
+                multithread.start()
+            except Exception as e:
+                print(e)
 
-            multithread=Thread(target=self.path_planning,args=(self.params,self.px))
-            multithread.start()
+
+            if self.bringworst==1:
+                try:
+                    multithread2=self.worst_path_planning(self.params,self.px)
+                    multithread2.start()
+                except Exception as e:
+                    print(e)
 
             if self.collisionDistance > self.uav_msg['uav_formation']['u_b']:
                 self.collisionDistance = self.uav_msg['uav_formation']['u_b']
@@ -1360,6 +1371,7 @@ class KagUAV(BaseUAV):
                 break
         return start
 
+
     def BCD(self,zones,area,data,px):
         area=np.array(area)
         sol=min(area[:,0])
@@ -1382,62 +1394,67 @@ class KagUAV(BaseUAV):
         start=1
         denied_start=0
         while True:
-            #print(dilim,bas,sinir,ustsinir)
-            paket=self.slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
-            #print(paket[3],paket[2])
-            if start==1:
-                altsinir=paket[2]
-                ustsinir=paket[3]
-                upper.append(paket[0])
-                lower.append(paket[1])
-                start=0
-                dilim=dilim+px
-            if start==0 and altsinir==paket[2] and ustsinir==paket[3]:
-                upper.append(paket[0])
-                lower.append(paket[1])
-                dilim=dilim+px
-            if start==0:
-                if (altsinir!=paket[2]) or (ustsinir!=paket[3]):
-                    if (altsinir!=paket[2]) and (ustsinir!=0):
-                        denied_start=dilim
-                    temp=[]
-                    temp=lower[::-1]
-                    cell=temp+upper
-                    cells.append(cell)
-                    cell=[]
-                    lower=[]
-                    upper=[]
+            try:
+                #print(dilim,bas,sinir,ustsinir)
+                paket=self.slice_control(dilim,bas,sinir,ustsinir,zones,data,px)
+                #print(paket[3],paket[2])
+                if start==1:
                     altsinir=paket[2]
                     ustsinir=paket[3]
-                if paket[2]!=0:
-                    new_start=self.unpack(paket[2],denied_start,data,px)
-                    if new_start[0] not in stack_point:
-                        stack_area.append(new_start[1])
-                        stack_point.append(new_start[0])
-                        stack_stop.append(new_start[2])
-                if dilim>sagsinir and len(stack_point)!=0:
-                    temp=[]
-                    temp=lower[::-1]
-                    cell=temp+upper
-                    cells.append(cell)
-                    cell=[]
-                    lower=[]
-                    upper=[]
-                    altsinir=paket[2]
-                    ustsinir=paket[3]
-                    pop=stack_point.pop()
-                    stack_area.pop()
-                    zone_stop=stack_stop.pop()
-                    dilim=pop[0]
-                    bas=pop[1]
-                    sagsinir=int(zone_stop)
-                if dilim>sagsinir and len(stack_point)==0:
-                    temp=[]
-                    temp=lower[::-1]
-                    cell=temp+upper
-                    cells.append(cell)
-                    #print("slm")
-                    break
+                    upper.append(paket[0])
+                    lower.append(paket[1])
+                    start=0
+                    dilim=dilim+px
+                if start==0 and altsinir==paket[2] and ustsinir==paket[3]:
+                    upper.append(paket[0])
+                    lower.append(paket[1])
+                    dilim=dilim+px
+                if start==0:
+                    if (altsinir!=paket[2]) or (ustsinir!=paket[3]):
+                        if (altsinir!=paket[2]) and (ustsinir!=0):
+                            denied_start=dilim
+                        temp=[]
+                        temp=lower[::-1]
+                        cell=temp+upper
+                        cells.append(cell)
+                        cell=[]
+                        lower=[]
+                        upper=[]
+                        altsinir=paket[2]
+                        ustsinir=paket[3]
+                    if paket[2]!=0:
+                        new_start=self.unpack(paket[2],denied_start,data,px)
+                        if new_start[0] not in stack_point:
+                            stack_area.append(new_start[1])
+                            stack_point.append(new_start[0])
+                            stack_stop.append(new_start[2])
+                    if dilim>sagsinir and len(stack_point)!=0:
+                        temp=[]
+                        temp=lower[::-1]
+                        cell=temp+upper
+                        cells.append(cell)
+                        cell=[]
+                        lower=[]
+                        upper=[]
+                        altsinir=paket[2]
+                        ustsinir=paket[3]
+                        pop=stack_point.pop()
+                        stack_area.pop()
+                        zone_stop=stack_stop.pop()
+                        dilim=pop[0]
+                        bas=pop[1]
+                        sagsinir=int(zone_stop)
+                    if dilim>sagsinir and len(stack_point)==0:
+                        temp=[]
+                        temp=lower[::-1]
+                        cell=temp+upper
+                        cells.append(cell)
+                        #print("slm")
+                        break
+            except:
+                dilim=dilim+px
+                if len(cells)>100:
+                    self.bringworst=1
         return cells
 
     def inDeniedZone(self, p, deniedZones):
@@ -1622,13 +1639,16 @@ class KagUAV(BaseUAV):
         temp=0
         for j in range(len(hashkeys)):
             for i in range(len(hashkeys)):
+                try:
 
-                low=-sub_dist[hashkeys[i]]
-                if temp>low:
-                    temp=low
-                    hashkey=hashkeys[i]
-                    index=i
-
+                    low=-sub_dist[hashkeys[i]]
+                    if temp>low:
+                        temp=low
+                        hashkey=hashkeys[i]
+                        index=i
+                except Exception as e:
+                    print(e)
+                    continue
             if hashkey not in hashlist:
                 hashlist.append(hashkey)
 
@@ -1816,22 +1836,15 @@ class KagUAV(BaseUAV):
         width=int(width)
         return width
 
-
-    def path_planning(self, data,px):
+    def worst_path_planning(self,data,px):
         self.bigger_denied_zones=self.biggerdenied(data["denied_zones"],35)
-        #print(self.bigger_denied_zones)
-
         tall_index = 0
         while(data['special_assets'][tall_index]['type'] != 'tall_building'):
             tall_index += 1
         self.special_assets = []
         tall_count = len(data['special_assets'][tall_index]['locations'])
 
-        #if data['special_assets'][tall_index]['width'][0] > data['special_assets'][tall_index]['width'][1]:
-        #    bridge_length = data['special_assets'][tall_index]['width'][0] * 100
-        #else:
-        #    bridge_length = data['special_assets'][tall_index]['width'][1] * 2.5
-        self.bridge_length = 100.0
+        self.bridge_length = 200.0
         self.cluster_count = 0
         self.cluster_element_treshold = 3
 
@@ -1858,10 +1871,149 @@ class KagUAV(BaseUAV):
             clusters.append([])
         for i in self.special_assets:
             clusters[i["c"]].append(i["p"])
-        scale=self.params["world_length"]**2
-        scale=scale//1000000
-        scale=int((3.125*scale)+71.875)
-        mask_for_cluster=self.unpacked_cluster(clusters,scale)
+
+        mask_for_cluster=self.unpacked_cluster(clusters,150)
+        merge_tall=[]
+        temp_mask_for_cluster=[]
+        for j in range(len(mask_for_cluster)):
+            for i in range(len(mask_for_cluster[j])):
+                merge_tall=merge_tall+mask_for_cluster[j][i]
+            merge_tall=np.array(merge_tall)
+            temp_mask_for_cluster.append(merge_tall)
+            merge_tall=[]
+        #kumelenme bitti
+
+        #kritik bolgeler "maxQ_areas" adi altinda kabuklandi
+        i=0
+        maxQ_Areas=[]
+        for i in range(1,len(temp_mask_for_cluster)):
+            points = temp_mask_for_cluster[i]
+            hull = ConvexHull(points)
+            temp=list(points[hull.vertices])
+            maxQ_Areas.append(temp)
+
+        #uzun bina lokasyonlari polygon icin ayarlandi
+        tall_locs_=[]
+        for t in range(len(data["special_assets"])):
+            if data["special_assets"][t]["type"]=="tall_building":
+                tall_width=max(data["special_assets"][t]["width"])+15
+                tall_locs=data["special_assets"][t]["locations"]
+                for i in range(len(tall_locs)):
+                    tmp=[tall_locs[i][0]-(tall_width/2),tall_locs[i][1]+(tall_width/2)]
+                    tmps=[[tmp[0],tmp[1]],[tmp[0]+tall_width,tmp[1]],[tmp[0]+tall_width,tmp[1]-tall_width],[tmp[0],tmp[1]-tall_width]]
+                    tall_locs_.append(tmps)
+        #hastane lokasyonlari polygon icin ayarlandi
+        h_locs=[]
+        i=0
+        h_width=60
+        h_height=80
+        for i in range(len(data["special_assets"])):
+            if data["special_assets"][i]["type"]=="hospital":
+                xtemp=[data["special_assets"][i]["location"]["x"],data["special_assets"][i]["location"]["y"]]
+                h_tmp=[data["special_assets"][i]["location"]["x"]-(h_width/2),data["special_assets"][i]["location"]["y"]+(h_height/2)]
+                h_tmps=[[h_tmp[0],h_tmp[1]],[h_tmp[0]+h_width,h_tmp[1]],[h_tmp[0]+h_width,h_tmp[1]-h_height],[h_tmp[0],h_tmp[1]-h_height]]
+                h_locs.append(h_tmps)
+
+        # path icin girilmemesi gereken bolgeler olusturuldu denied zone ,uzun binalar , ve hastaneler.
+
+        subareas=MaxQ_Areas
+
+        all_denied=[]
+        all_denied=tall_locs_+h_locs+self.bigger_denied_zones
+        path_for_subareas={}
+        temp=[]
+        self.path_keys=[]
+        top_right=max(data["world_boundaries"])
+        for path_point in range(0,data["world_length"],px):
+            for path_point1 in range (0,data["world_width"],px):
+                make_point=[top_right[0]-path_point,top_right[1]-path_point1]
+                ekle=1
+                for i in range (len(all_denied)):
+                    paths=mpltPath.Path(all_denied[i])
+                    inside=paths.contains_points([make_point])
+                    if inside==True:
+                        ekle=0
+                    elif inside==False:
+                        continue
+                if ekle==1:
+                    pack=self.point_control(subareas,make_point)
+                    hashh=hash(str(pack[1]))
+                    if str(str(hashh)) in path_for_subareas:
+
+                        temp=path_for_subareas[str(hashh)]
+                        temp.append(make_point)
+                        if hashh not in self.path_keys:
+                            self.path_keys.append(hashh)
+                        path_for_subareas[str(hashh)]=temp
+                    else:
+                        path_for_subareas[str(hashh)]=[make_point]
+
+        i=0
+        sorted_path_keys=[]
+        for i in range((len(sorted_subareas))):
+            sorted_path_keys.append(hash(str(sorted_subareas[i])))
+        #print(sorted_path_keys)
+        i=0
+        a=0
+        for i in range(len(sorted_path_keys)):
+            if sorted_path_keys[i-a] not in self.path_keys:
+                sorted_path_keys.pop(i-a)
+                a=a+1
+
+        #tum bolgelere yol cizildi
+        for i in range(len(sorted_path_keys)):
+            hashh=sorted_path_keys[i]
+            new_path=self.findPath(hashh,path_for_subareas,px)
+            path_for_subareas[str(hashh)]=new_path
+
+        self.sorted_path_keys=sorted_path_keys
+        self.path_for_subareas=path_for_subareas
+        self.sorted_subareas=subareas
+
+
+    def path_planning(self, data,px):
+        self.bigger_denied_zones=self.biggerdenied(data["denied_zones"],35)
+        #print(self.bigger_denied_zones)
+
+        tall_index = 0
+        while(data['special_assets'][tall_index]['type'] != 'tall_building'):
+            tall_index += 1
+        self.special_assets = []
+        tall_count = len(data['special_assets'][tall_index]['locations'])
+
+        #if data['special_assets'][tall_index]['width'][0] > data['special_assets'][tall_index]['width'][1]:
+        #    bridge_length = data['special_assets'][tall_index]['width'][0] * 100
+        #else:
+        #    bridge_length = data['special_assets'][tall_index]['width'][1] * 2.5
+        self.bridge_length = 200.0
+        self.cluster_count = 0
+        self.cluster_element_treshold = 3
+
+        deniedZones = data['denied_zones']
+        self.position_offset = float(data['world_length'] / 2)
+        color_cursor = 0
+        colors = [
+            'black',
+            'red',
+            'green',
+            'blue',
+            'magenta',
+            'yellow',
+            'cyan',
+        ]
+        #bolgeler kumelendi "special_assets" diye
+        self.makeClusters(data)
+        for i in range(len(self.special_assets)):
+            self.special_assets[i]['p'] = self.normalPos(self.special_assets[i]['p'])
+
+
+        clusters=[]
+        for i in range(self.cluster_count+1):
+            clusters.append([])
+        for i in self.special_assets:
+            clusters[i["c"]].append(i["p"])
+
+        mask_for_cluster=self.unpacked_cluster(clusters,150)
         merge_tall=[]
         temp_mask_for_cluster=[]
         for j in range(len(mask_for_cluster)):
@@ -1912,7 +2064,7 @@ class KagUAV(BaseUAV):
         denied_for_bcd=[]
         denied_for_bcd=self.bigger_denied_zones+mask_for_cluster[0]+maxQ_Areas
         area=data["world_boundaries"]
-        subareas=self.BCD(denied_for_bcd,area,data,5)
+        subareas=self.BCD(denied_for_bcd,area,data,20)
         #subareas adi altinda hucreler olustu
         i=0
         temp=[]
