@@ -414,7 +414,7 @@ class KagUAV(BaseUAV):
                 slowdown_y=self.uav_msg["active_uav"]["y_speed"]-simple_y
                 x_speed=slowdown_x
                 y_speed=slowdown_y
-                print("slow downnnn ",x_speed,y_speed)
+                #print("slow downnnn ",x_speed,y_speed)
         #print(self.uav_msg["active_uav"]["heading"])
         self.send_move_cmd(x_speed, y_speed, target_angle, self.altitude_control)
 
@@ -689,16 +689,18 @@ class KagUAV(BaseUAV):
             try:
                 multithread=Thread(target=self.path_planning,args=(self.params,self.px))
                 multithread.start()
+                print("mt1 calisti")
             except Exception as e:
-                self.bringworst=1
                 print(e)
 
-            if self.bringworst==1:
-                try:
-                    multithread2=self.worst_path_planning(self.params,self.px)
-                    multithread2.start()
-                except Exception as e:
-                    print(e)
+            try:
+                multithread2=Thread(target=self.worst_path_planning,args=(self.params,self.px))
+                multithread2.start()
+                print("mt2 calisti")
+            except Exception as e:
+                print(e)
+
+
 
             if self.collisionDistance > self.uav_msg['uav_formation']['u_b']:
                 self.collisionDistance = self.uav_msg['uav_formation']['u_b']
@@ -820,6 +822,12 @@ class KagUAV(BaseUAV):
     '''
     def scan_func(self):
         if self.operation_phase == 2:
+            try:
+                print(self.sorted_path_keys,self.path_for_subareas,self.sorted_subareas)
+            except:
+                self.sorted_path_keys=self.worst_sorted_path_keys
+                self.path_for_subareas=self.worst_path_for_subareas
+                self.sorted_subareas=self.worst_sorted_subareas
             if self.before_scan == 0:
 
                 self.before_scan = 1
@@ -1916,7 +1924,7 @@ class KagUAV(BaseUAV):
 
         # path icin girilmemesi gereken bolgeler olusturuldu denied zone ,uzun binalar , ve hastaneler.
 
-        subareas=MaxQ_Areas
+        subareas=maxQ_Areas
 
         all_denied=[]
         all_denied=tall_locs_+h_locs+self.bigger_denied_zones
@@ -1944,14 +1952,16 @@ class KagUAV(BaseUAV):
                         temp.append(make_point)
                         if hashh not in self.path_keys:
                             self.path_keys.append(hashh)
+                            #print(hashh)
                         path_for_subareas[str(hashh)]=temp
                     else:
                         path_for_subareas[str(hashh)]=[make_point]
 
         i=0
         sorted_path_keys=[]
-        for i in range((len(sorted_subareas))):
-            sorted_path_keys.append(hash(str(sorted_subareas[i])))
+        for i in range((len(subareas))):
+            sorted_path_keys.append(hash(str(subareas[i])))
+        #print(sorted_path_keys)
         #print(sorted_path_keys)
         i=0
         a=0
@@ -1959,16 +1969,18 @@ class KagUAV(BaseUAV):
             if sorted_path_keys[i-a] not in self.path_keys:
                 sorted_path_keys.pop(i-a)
                 a=a+1
-
+        #print(sorted_path_keys,"son")
         #tum bolgelere yol cizildi
         for i in range(len(sorted_path_keys)):
             hashh=sorted_path_keys[i]
             new_path=self.findPath(hashh,path_for_subareas,px)
             path_for_subareas[str(hashh)]=new_path
-
-        self.sorted_path_keys=sorted_path_keys
-        self.path_for_subareas=path_for_subareas
-        self.sorted_subareas=subareas
+        #print(self.path_keys)
+        #print(sorted_path_keys)
+        self.worst_sorted_path_keys=sorted_path_keys
+        self.worst_path_for_subareas=path_for_subareas
+        self.worst_sorted_subareas=subareas
+        print("worst path bitti")
 
 
     def path_planning(self, data,px):
@@ -2154,6 +2166,7 @@ class KagUAV(BaseUAV):
         #self.sorted_tasks_hash=tasks_hash
         self.sorted_subareas=sorted_subareas
         self.path_for_subareas=path_for_subareas
+        print("normal path bitti")
         #print(self.sorted_path_keys)
 
     def findDRS(self,path_array):
