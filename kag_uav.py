@@ -143,7 +143,7 @@ class KagUAV(BaseUAV):
         self.scanAltitude = self.params["logical_camera_height_max"] - 5
 
     def scanloop(self):
-        print(self.forcequit,"quit value")
+        #print(self.forcequit,"quit value")
         if self.forcequit==0:
             if self.scan_timer==0:
                 self.scan_start_time=self.uav_msg["sim_time"]
@@ -158,6 +158,7 @@ class KagUAV(BaseUAV):
                 for i in range(len(self.uav_msg["hospitals_in_range"])):
                     if self.uav_msg["hospitals_in_range"][i]["quota"]==0:
                         self.full_hospital_list.append(self.uav_msg["hospitals_in_range"][i]["location"])
+
 
 
             if self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==True:
@@ -189,11 +190,22 @@ class KagUAV(BaseUAV):
                     #print(self.scan_id)
                     self.scan_path=self.path_for_subareas[self.scan_id]
 
+
                 self.inj_list=self.findainjured()
-                if len(self.inj_list)!=0:
+                print(len(self.inj_list))
+                if len(self.inj_list)>0:
                     self.dontback=True
+                    if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 4:
+                        self.status="paused"
+                    if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) > 4:
+
+                        self.send_move_cmd(0,0,self.uav_msg["active_uav"]["heading"],self.uav_msg["active_uav"]["altitude"])
+                        return
+
                 else:
                     self.dontback=False
+                    print(self.inj_list)
+
                 #rotasyona gerek yoksa.
                 if self.dist(self.scan_path[0],[self.pose[0],self.pose[1]])<=self.px*2:
                     self.rotation_array=None
@@ -222,11 +234,14 @@ class KagUAV(BaseUAV):
                     if self.dist(self.drs_direct_points[0],[self.pose[0],self.pose[1]])<7:
                         #print("drs bolgesine ulasildi")
                         self.inj_list=self.findainjured()
+                        print(len(self.inj_list))
                         if len(self.inj_list)!=0:
                             self.dontback=True
+                            self.send_move_cmd(0,0,self.uav_msg["active_uav"]["heading"],self.uav_msg["active_uav"]["altitude"])
+                            if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 4:
+                                self.status="paused"
                         else:
                             self.dontback=False
-                            self.status="paused"
                             print(self.inj_list)
                             self.instant_path.pop(0)
 
@@ -337,6 +352,7 @@ class KagUAV(BaseUAV):
                     print("yarali basariyla birakildi")
                 if self.paused=="bekle" and self.paused_rotation_path[0]==self.min_h_loc and self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False:
                     self.inj_list=self.findainjured()
+                    print(len(self.inj_list))
                     if len(self.inj_list)!=0:
                         self.dontback=True
                     else:
@@ -953,7 +969,7 @@ class KagUAV(BaseUAV):
                 #print(self.tasks_hash)
                 self.scantemp = 1
                 print(self.tasks_hash)
-                self.send_move_cmd(0, 0, self.pose[3], self.pose[2])
+                self.send_move_cmd(0, 0, self.uav_msg["active_uav"]["heading"], self.uav_msg["active_uav"]["altitude"])
             if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 5 or self.scantemp == 0:
                 self.scantemp = 0
                 self.scanloop()
@@ -1384,7 +1400,7 @@ class KagUAV(BaseUAV):
     def amifallback(self):
         if self.dontback==True:
             return
-        fuel=self.uav_msg['active_uav']["fuel_reserve"]
+        fuel=self.uav_msg['active_uav']["fuel_reserve"]-30
         if self.start_loc==None:
             return
         if self.fallback==False:
@@ -1619,7 +1635,7 @@ class KagUAV(BaseUAV):
         return math.sqrt(sum)
 
     def makeClusters(self, data):
-        
+
         for building in data['special_assets']:
             if building['type'] == 'tall_building':
                 for p in building['locations']:
