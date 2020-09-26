@@ -520,9 +520,10 @@ class KagUAV(BaseUAV):
             x_speed=x_speed/2
             y_speed=y_speed/2
             print(self.uav_msg["active_uav"]["equipments"]["telecom_beacon"]["telecom_served_people_count"])
-            
+
         self.inj_list=self.findainjured()
-        if self.status!="paused" and self.inj_list>0:
+        if self.status!="paused" and len(self.inj_list)>0:
+            #print("slm")
             x_speed=0
             y_speed=0
         self.send_move_cmd(x_speed, y_speed, target_angle, self.altitude_control)
