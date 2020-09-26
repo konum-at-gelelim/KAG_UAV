@@ -173,14 +173,15 @@ class KagUAV(BaseUAV):
                         self.scan_path=None
 
                 if self.uav_msg["active_uav"]["injured_rescue_status"]["isCarrying"]==False and len(self.inj_list)==0 and len(self.tasks_hash[self.uav_id])==0 and self.scan_path==None:
-                    self.healthy_list=self.findahealthy()
-                    if len(healthy_list)>0:
-                        findRotationPath(self.bigger_denied_zones,[self.pose[0],self.pose[1]],self.scan_path[0],self.px)
-                    else:
-                        self.forcequit=1
-                        self.operation_phase=3
-                        print("im out")
-                        return
+                    #self.healthy_list=self.findahealthy()
+                    #if len(healthy_list)>0:
+                        #findRotationPath(self.bigger_denied_zones,[self.pose[0],self.pose[1]],self.scan_path[0],self.px)
+                    #else:
+                    self.forcequit=1
+                    self.operation_phase=3
+                    print("im out")
+                    return
+
                 if self.scan_path==None:
                     #print("scan path olusturuldu")
                     #print(self.tasks_hash[self.uav_id])
@@ -1618,96 +1619,7 @@ class KagUAV(BaseUAV):
         return math.sqrt(sum)
 
     def makeClusters(self, data):
-        data["special_assets"][0]["locations"]=[
-                [
-                    25.0,
-                    25.0
-                ],
-                [
-                    25.0,
-                    65.0
-                ],
-                [
-                    25.0,
-                    100.0
-                ],
-                [
-                    50.0,
-                    100.0
-                ],
-                [
-                    90.0,
-                    100.0
-                ],
-                [
-                    19.7094,
-                    231.181
-                ],
-                [
-                    19.6112,
-                    193.568
-                ],
-                [
-                    24.5978,
-                    147.33
-                ],
-                [
-                    55.4303,
-                    233.54
-                ],
-                [
-                    97.8246,
-                    231.951
-                ],
-                [
-                    -35.7558,
-                    -34.5532
-                ],
-                [
-                    -104.068,
-                    -41.8295
-                ],
-                [
-                    -32.3823,
-                    -148.223
-                ],
-                [
-                    63.1084,
-                    -42.8945
-                ],
-                [
-                    31.8456,
-                    -110.407
-                ],
-                [
-                    -78.412,
-                    206.0
-                ],
-                [
-                    -42.4917,
-                    115.22
-                ],
-                [
-                    -46.4315,
-                    212.525
-                ],
-                [
-                    -44.5435,
-                    37.5423
-                ],
-                [
-                    473.911,
-                    197.56
-                ],
-                [
-                    468.485,
-                    116.395
-                ],
-                [
-                    469.554,
-                    46.1232
-                ]
-            ]
+        
         for building in data['special_assets']:
             if building['type'] == 'tall_building':
                 for p in building['locations']:
@@ -1877,7 +1789,7 @@ class KagUAV(BaseUAV):
                         hashkey=hashkeys[i]
                         index=i
                 except Exception as e:
-                    #print(e)
+                    print(e)
                     continue
             if hashkey not in hashlist:
                 hashlist.append(hashkey)
@@ -2074,7 +1986,7 @@ class KagUAV(BaseUAV):
         self.special_assets = []
         tall_count = len(data['special_assets'][tall_index]['locations'])
 
-        self.bridge_length = 100.0
+        self.bridge_length = 200.0
         self.cluster_count = 0
         self.cluster_element_treshold = 3
 
@@ -2102,7 +2014,7 @@ class KagUAV(BaseUAV):
         for i in self.special_assets:
             clusters[i["c"]].append(i["p"])
 
-        mask_for_cluster=self.unpacked_cluster(clusters,75)
+        mask_for_cluster=self.unpacked_cluster(clusters,150)
         merge_tall=[]
         temp_mask_for_cluster=[]
         for j in range(len(mask_for_cluster)):
@@ -2126,7 +2038,7 @@ class KagUAV(BaseUAV):
         tall_locs_=[]
         for t in range(len(data["special_assets"])):
             if data["special_assets"][t]["type"]=="tall_building":
-                tall_width=max(data["special_assets"][t]["width"])+15
+                tall_width=max(data["special_assets"][t]["width"])+35
                 tall_locs=data["special_assets"][t]["locations"]
                 for i in range(len(tall_locs)):
                     tmp=[tall_locs[i][0]-(tall_width/2),tall_locs[i][1]+(tall_width/2)]
@@ -2219,7 +2131,7 @@ class KagUAV(BaseUAV):
         #    bridge_length = data['special_assets'][tall_index]['width'][0] * 100
         #else:
         #    bridge_length = data['special_assets'][tall_index]['width'][1] * 2.5
-        self.bridge_length = 100.0
+        self.bridge_length = 200.0
         self.cluster_count = 0
         self.cluster_element_treshold = 3
 
