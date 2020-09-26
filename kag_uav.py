@@ -197,10 +197,6 @@ class KagUAV(BaseUAV):
                     self.dontback=True
                     if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) <= 4:
                         self.status="paused"
-                    if math.sqrt(self.uav_msg['active_uav']['x_speed']**2 + self.uav_msg['active_uav']['y_speed']**2) > 4:
-
-                        self.send_move_cmd(0,0,self.uav_msg["active_uav"]["heading"],self.uav_msg["active_uav"]["altitude"])
-                        return
 
                 else:
                     self.dontback=False
@@ -524,6 +520,11 @@ class KagUAV(BaseUAV):
             x_speed=x_speed/2
             y_speed=y_speed/2
             print(self.uav_msg["active_uav"]["equipments"]["telecom_beacon"]["telecom_served_people_count"])
+            
+        self.inj_list=self.findainjured()
+        if self.status!="paused" and self.inj_list>0:
+            x_speed=0
+            y_speed=0
         self.send_move_cmd(x_speed, y_speed, target_angle, self.altitude_control)
 
     def getXY_forpath(self, x, y, speed):
@@ -2199,7 +2200,7 @@ class KagUAV(BaseUAV):
         tall_locs_=[]
         for t in range(len(data["special_assets"])):
             if data["special_assets"][t]["type"]=="tall_building":
-                tall_width=max(data["special_assets"][t]["width"])+15
+                tall_width=max(data["special_assets"][t]["width"])+35
                 tall_locs=data["special_assets"][t]["locations"]
                 for i in range(len(tall_locs)):
                     tmp=[tall_locs[i][0]-(tall_width/2),tall_locs[i][1]+(tall_width/2)]
